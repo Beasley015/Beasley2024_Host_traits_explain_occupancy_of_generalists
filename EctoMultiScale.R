@@ -25,8 +25,13 @@ mamm.2020 <- mamm.raw %>%
   filter(Date > as.Date("2020-01-01")) %>%
   select(Site:Day, Tag, Abbrev:Mass, Ecto) %>%
   filter(Tag != "") %>%
-  filter(!Abbrev %in% c("", "PE??")) %>%
+  filter(!Abbrev %in% c("", "PE??", "SOCI")) %>%
   rename("SampleNo." = Ecto)
+
+# Ectos 
+ecto.clean <- ecto.raw %>%
+  filter(Other != "Springtail?") %>%
+  .[!(.$Order == "Ixodida" & .$Species == ""),]
 
 # Veg
 veg.2020 <- veg.raw %>%
@@ -35,8 +40,7 @@ veg.2020 <- veg.raw %>%
 
 # Merge mammal and parasite data ----------------------------
 mamm.ecto <- mamm.2020 %>%
-  left_join(., ecto.raw, by = "SampleNo.") %>%
-  filter(Order != "")
+  left_join(., ecto.raw, by = "SampleNo.") 
 
 # Mammal summary stats and early tables/figures ------------------
 # Number of mammal species
@@ -47,6 +51,7 @@ mamm.abund <- mamm.2020 %>%
   distinct_at(.vars = vars(Site, Abbrev, Tag), .keep_all = T) %>%
   group_by(Abbrev) %>%
   summarise(Count = n()) 
+
 # Create rank-abundance figure
 mamm.abund$Abbrev <- reorder(mamm.abund$Abbrev, -mamm.abund$Count)
 
@@ -60,17 +65,27 @@ ggplot(data = mamm.abund, aes(x = Abbrev, y = Count))+
 
 # Parasite summary and tables/figures -----------------------
 # Number of ectoparasite orders
-length(unique(mamm.ecto$Order))
+length(unique(ecto.clean$Order))
 
 # Number of ecto families
-length(unique(mamm.ecto$Family))
+length(unique(ecto.clean$Family))
 
 # Number of ecto species
-nrow(unique(mamm.ecto[c("Order", "Genus", "Species")]))-2
-# Need to subtract 2 because I can't figure out how to get 
-# a couple of non-ID'd Ixodidae out of there
+nrow(unique(ecto.clean[c("Order", "Genus", "Species")]))
+
+# Abundance per order
+mamm.ecto %>%
+  filter(is.na(Order) == F & Order != "") %>%
+  group_by(Order) %>%
+  summarise(Count = n()) 
+# So many fleas
 
 # Prevalence by host species
+mamm.prev <- mamm.ecto %>%
+  group_by(Abbrev) %>%
+  summarise(Prevalence = 
+              length(Order[Order != "" & is.na(Order) == F])/
+              length(Order))
 
 # Avg. load per host species
 
