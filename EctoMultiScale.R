@@ -9,6 +9,7 @@
 # Setup --------------------------------------------
 # Load packages
 library(tidyverse)
+library(viridis)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -87,7 +88,46 @@ mamm.prev <- mamm.ecto %>%
               length(Order[Order != "" & is.na(Order) == F])/
               length(Order))
 
-# Avg. load per host species
+qplot(Abbrev, Prevalence, data = mamm.prev, geom = "col")
+
+# Avg. load per capture event per species
+mamm.load <- mamm.ecto %>%
+  group_by(Abbrev, SampleNo.) %>%
+  filter(SampleNo. != "") %>%
+  summarise(ecto = n())
+
+qplot(ecto, data = mamm.load, geom = "bar")
 
 # Raster of parasite specs present on host specs
+mamm.raster <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  select(Abbrev, Order, Family, Genus, Species) %>%
+  group_by(Abbrev) %>%
+  distinct() %>% 
+  filter(Order != "" & is.na(Order)==F) %>%
+  .[!(.$Order == "Ixodida" & .$Species == ""),] %>%
+  unite(ecto, Genus, Species) %>%
+  mutate(Occ = 1)
 
+ggplot(mamm.raster, aes(x = ecto, y = Abbrev))+
+  geom_raster(aes(fill = Order))+
+  scale_fill_viridis_d()+
+  theme_bw()+
+  theme(axis.text.x = element_blank(), panel.grid = element_blank())
+
+# Hosts per ecto species
+n.host <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  select(Abbrev, Order, Genus, Species) %>%
+  distinct() %>% 
+  filter(Order != "" & is.na(Order)==F) %>%
+  .[!(.$Order == "Ixodida" & .$Species == ""),] %>%
+  unite(ecto, Genus, Species) %>%
+  group_by(Order, ecto) %>%
+  summarise(hosts = n())
+
+qplot(hosts, data = n.host, geom = "bar", fill=Order)
+# default colors are BLINDING good lord
+
+# Prepping data for MSOM ----------------------------
+# Data shape: [host individual, survey, site, ecto species]
