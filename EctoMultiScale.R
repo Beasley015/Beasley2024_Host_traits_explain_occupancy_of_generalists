@@ -61,8 +61,10 @@ ggplot(data = mamm.abund, aes(x = Abbrev, y = Count))+
   scale_y_continuous(expand = c(0,0), 
                      limits = c(0, max(mamm.abund$Count+10)))+
   labs(x = "Species", y = "Abundance")+
-  theme_bw()+
+  theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
+
+# ggsave("MammAbund.jpeg")
 
 # Parasite summary and tables/figures -----------------------
 # Number of ectoparasite orders
@@ -81,14 +83,28 @@ mamm.ecto %>%
   summarise(Count = n()) 
 # So many fleas
 
+# table <- mamm.ecto %>%
+#   filter(is.na(Order) == F & Order != "") %>%
+#   group_by(Order, Genus, Species) %>%
+#   summarise(Count = n())
+
 # Prevalence by host species
 mamm.prev <- mamm.ecto %>%
   group_by(Abbrev) %>%
   summarise(Prevalence = 
               length(Order[Order != "" & is.na(Order) == F])/
-              length(Order))
+              length(Order)) 
 
-qplot(Abbrev, Prevalence, data = mamm.prev, geom = "col")
+mamm.prev$Abbrev <- reorder(mamm.prev$Abbrev, 
+                            -mamm.prev$Prevalence)
+
+ggplot(data = mamm.prev, aes(x = Abbrev, y = Prevalence))+
+  geom_col(color = "black", fill = "lightgray")+
+  labs(x = "Species")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave(filename = "MammPrev.jpeg")
 
 # Avg. load per capture event per species
 mamm.load <- mamm.ecto %>%
@@ -96,7 +112,15 @@ mamm.load <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
   summarise(ecto = n())
 
-qplot(ecto, data = mamm.load, geom = "bar")
+ggplot(data = mamm.load, aes(x = ecto))+
+  geom_bar(color = "black", fill = "lightgray")+
+  labs(x = "Parasite Load", y = "Number of Samples")+
+  scale_x_continuous(expand = c(0,0), breaks = seq(0,10,1))+
+  scale_y_continuous(expand = c(0,0), limits = c(0, 200))+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("EctoLoad.jpeg")
 
 # Raster of parasite specs present on host specs
 mamm.raster <- mamm.ecto %>%
@@ -109,11 +133,16 @@ mamm.raster <- mamm.ecto %>%
   unite(ecto, Genus, Species) %>%
   mutate(Occ = 1)
 
-ggplot(mamm.raster, aes(x = ecto, y = Abbrev))+
+ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
   geom_raster(aes(fill = Order))+
-  scale_fill_viridis_d()+
-  theme_bw()+
-  theme(axis.text.x = element_blank(), panel.grid = element_blank())
+  scale_fill_viridis_d(limits = c("Siphonaptera", "Ixodida",
+                                  "Mesostigmata", "Diptera"))+
+  labs(x = "Host Species", y = "Parasite Species")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("ectosraster.jpeg", height = 4, width = 8.5,
+#        units = "in")
 
 # Hosts per ecto species
 n.host <- mamm.ecto %>%
@@ -126,8 +155,15 @@ n.host <- mamm.ecto %>%
   group_by(Order, ecto) %>%
   summarise(hosts = n())
 
-qplot(hosts, data = n.host, geom = "bar", fill=Order)
-# default colors are BLINDING good lord
+ggplot(data = n.host, aes(x = hosts, fill = Order))+
+  geom_bar(color = "black")+
+  scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
+                                         start = 0.05))+
+  labs(x = "Number of Hosts", y = "Number of Parasite Species")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("NumOfHosts.jpeg")
 
 # Prepping data for MSOM ----------------------------
 # Data shape: [host individual, survey, site, ecto species]
