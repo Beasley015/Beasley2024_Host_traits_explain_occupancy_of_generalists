@@ -2,7 +2,7 @@
 # Building multi-scale MSOM to test links between #
 # ectoparasite life history and relative          #
 # importance of covariates, host specificity      #
-# Ch. 2 of dissertation                           #
+# Ch. 3 of dissertation                           #
 # Spring 2021                                     #
 ###################################################
 
@@ -10,6 +10,7 @@
 # Load packages
 library(tidyverse)
 library(viridis)
+library(abind)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -39,9 +40,18 @@ veg.2020 <- veg.raw %>%
   mutate(Date = as.Date(Date, format = "%d/%m/%Y")) %>%
   filter(Date > as.Date("2020-01-01"))
 
-# Merge mammal and parasite data ----------------------------
+# Merge datasets and adjust day by sampling period --------------------
+breaks <- c(as.Date("2020-05-25"), as.Date("2020-06-17"),
+            as.Date("2020-07-12"), as.Date("2020-08-08"))
+
 mamm.ecto <- mamm.2020 %>%
-  left_join(., ecto.raw, by = "SampleNo.") 
+  left_join(., ecto.raw, by = "SampleNo.") %>%
+  mutate(trap.sesh = cut(as.Date(Date, format = "%Y-%m-%d"), breaks, 
+                         labels = as.character(1:3))) %>%
+  mutate(Day = case_when(trap.sesh == "2" ~ as.character(Day+3),
+                         trap.sesh == "3" ~ as.character(Day+6),
+                         TRUE ~ as.character(Day))) %>%
+  mutate(Day = as.numeric(Day))
 
 # Mammal summary stats and early tables/figures ------------------
 # Number of mammal species
@@ -166,4 +176,18 @@ ggplot(data = n.host, aes(x = hosts, fill = Order))+
 # ggsave("NumOfHosts.jpeg")
 
 # Prepping data for MSOM ----------------------------
-# Data shape: [host individual, survey, site, ecto species]
+# Clean data
+mecto.clean <- mamm.ecto %>%
+  filter(!(SampleNo. != "" & is.na(Species) == T))
+
+# Select columns and add occupancy column
+mecto.smol <- mecto.clean %>%
+  select(Tag, Site, Day, Genus, Species) %>%
+  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  mutate(Ecto = case_when(Ecto == "_" ~ NA_character_,
+                          Ecto == "" ~ NA_character_,
+                          TRUE ~ Ecto)) %>%
+  mutate(Occ = case_when(Ecto == NA ~ NA_real_, TRUE ~ 1))
+
+
+
