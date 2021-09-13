@@ -45,7 +45,7 @@ breaks <- c(as.Date("2020-05-25"), as.Date("2020-06-17"),
             as.Date("2020-07-12"), as.Date("2020-08-08"))
 
 mamm.ecto <- mamm.2020 %>%
-  left_join(., ecto.raw, by = "SampleNo.") %>%
+  left_join(., ecto.clean, by = "SampleNo.") %>%
   mutate(trap.sesh = cut(as.Date(Date, format = "%Y-%m-%d"), breaks, 
                          labels = as.character(1:3))) %>%
   mutate(Day = case_when(trap.sesh == "2" ~ as.character(Day+3),
@@ -139,7 +139,6 @@ mamm.raster <- mamm.ecto %>%
   group_by(Abbrev) %>%
   distinct() %>% 
   filter(Order != "" & is.na(Order)==F) %>%
-  .[!(.$Order == "Ixodida" & .$Species == ""),] %>%
   unite(ecto, Genus, Species) %>%
   mutate(Occ = 1)
 
@@ -160,7 +159,6 @@ n.host <- mamm.ecto %>%
   select(Abbrev, Order, Genus, Species) %>%
   distinct() %>% 
   filter(Order != "" & is.na(Order)==F) %>%
-  .[!(.$Order == "Ixodida" & .$Species == ""),] %>%
   unite(ecto, Genus, Species) %>%
   group_by(Order, ecto) %>%
   summarise(hosts = n())
