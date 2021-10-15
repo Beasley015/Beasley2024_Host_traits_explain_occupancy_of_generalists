@@ -185,7 +185,30 @@ mecto.smol <- mecto.clean %>%
   mutate(Ecto = case_when(Ecto == "_" ~ NA_character_,
                           Ecto == "" ~ NA_character_,
                           TRUE ~ Ecto)) %>%
-  mutate(Occ = case_when(Ecto == NA ~ NA_real_, TRUE ~ 1))
+  mutate(Occ = case_when(is.na(Ecto) == T ~ 0, TRUE ~ 1))
 
+# Expand trap days
+mecto.days <- mecto.smol %>%
+  group_by(Tag) %>%
+  pivot_wider(names_from = Day, values_from = Occ, values_fn = sum) %>%
+  select(Tag, Site, Ecto, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`) %>%
+  mutate_at(.vars = '4':'12', .funs = function(x) case_when(x > 1 ~ 1,
+                                                            x == 1 ~ 1,
+                                                            x == 0 ~ 0))
+
+# Shift non-0 values left to convert to capture no.
+caplist <- list()
+for(i in 1:nrow(mecto.days)){
+  x <- mecto.days[i,4:12]
+  y <- c(x[!is.na(x)], x[is.na(x)])
+  y <- data.frame(as.list(y))
+  colnames(y) <- 1:9
+
+  z <- cbind(mecto.days[i,1:3], y)
+  caplist[[i]] <- z
+}
+
+mecto.caps <- do.call("rbind", caplist)
+mecto.caps <- mecto.caps[,-c(9:12)]
 
 
