@@ -173,10 +173,11 @@ ggplot(data = n.host, aes(x = hosts, fill = Order))+
 
 # ggsave("NumOfHosts.jpeg")
 
-# Prepping data for MSOM ----------------------------
+# Prepping data for MSOM ----------------------
 # Clean data
 mecto.clean <- mamm.ecto %>%
-  filter(!(SampleNo. != "" & is.na(Species) == T))
+  filter(!(SampleNo. != "" & is.na(Species) == T)) %>%
+  filter(Tag != "RECAP")
 
 # Select columns and add occupancy column
 mecto.smol <- mecto.clean %>%
@@ -187,14 +188,34 @@ mecto.smol <- mecto.clean %>%
                           TRUE ~ Ecto)) %>%
   mutate(Occ = case_when(is.na(Ecto) == T ~ 0, TRUE ~ 1))
 
+# Fill in missing host/ecto pairs and host/day pairs
+combos <- distinct(expand_grid(mecto.smol$Tag, mecto.smol$Ecto))
+
+mecto.joined <- mecto.smol %>%
+  full_join(combos, by = c("Tag" = "mecto.smol$Tag", 
+                           "Ecto" ="mecto.smol$Ecto")) %>%
+  filter(is.na(Ecto) == F)
+  
+combos2 <- mecto.joined %>%
+  group_by(Tag) %>%
+  expand(Tag, Day, Ecto)
+  
+mecto.full <- mecto.joined %>%
+  right_join(combos2) %>%
+  mutate(Occ = case_when(is.na(Occ) == T ~ 0, TRUE ~ Occ)) %>%
+  arrange(Tag) %>%
+  fill(Site, Day) %>%
+  distinct()
+
 # Expand trap days
-mecto.days <- mecto.smol %>%
+mecto.days <- mecto.full %>%
   group_by(Tag) %>%
   pivot_wider(names_from = Day, values_from = Occ, values_fn = sum) %>%
   select(Tag, Site, Ecto, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`) %>%
   mutate_at(.vars = '4':'12', .funs = function(x) case_when(x > 1 ~ 1,
                                                             x == 1 ~ 1,
-                                                            x == 0 ~ 0))
+                                                            x == 0 ~ 0)) %>%
+  ungroup()
 
 # Shift non-0 values left to convert to capture no.
 caplist <- list()
@@ -211,4 +232,58 @@ for(i in 1:nrow(mecto.days)){
 mecto.caps <- do.call("rbind", caplist)
 mecto.caps <- mecto.caps[,-c(9:12)]
 
+# Convert to list
+ecto.list <- split(mecto.caps, mecto.caps$Ecto)
 
+# Create vector for site and drop from list
+site.vec <- as.numeric(factor(ecto.list[[1]]$Site))
+
+ecto.list <- lapply(ecto.list, 
+                    function(x) x <- select(x, -c(Site, Ecto, Tag)))
+
+# Coerce to array
+ecto.ar <- array(as.numeric(unlist(ecto.list)), 
+                 dim=c(nrow(ecto.list[[1]]), ncol(ecto.list[[1]]), 
+                       length(ecto.list)))
+
+# Write model -------------------------
+cat("
+    model{
+    # Define hyperpriors
+    
+    # Priors
+    for(i in 1:necto){
+    
+      a0[i]
+      
+      b0[i]
+      
+      c0[i]
+    
+      # Occupancy model: Site
+      for(j in 1:nsite){
+      
+        logit(psi[j,i]) <- a0[i]
+        Z[j,i] ~ dbern(psi[j,i])
+    
+        # Occupancy model: Host
+        for(k in 1:nind){
+        
+          logit(theta[k[site.vec==j], i]) <- b0[i]
+          mu.theta[k[site.vec==j], i] <- theta[k[site.vec==j],i]*Z[j,i]
+          Y[k[site.vec==j],i] ~ dbern(mu.theta[k[site.vec==j], i])
+    
+          # Detection model
+          for(l in 1:ncap){
+          
+          logit(p[k[site.vec==j],l,i]) <- c0[i]
+          mu.p[k[site.vec==j],l,i] <- p[k[site.vec==j],l,i]*
+                                      theta[k[site.vec==j],i]
+          obs[k[site.vec==j],l,i] ~ dbern(mu.p[k[site.vec==j],l,i])
+    
+          }
+        }
+      }
+    }
+    }
+    ", file="ectomod.txt")
