@@ -11,6 +11,7 @@
 library(tidyverse)
 library(viridis)
 library(abind)
+library(R2jags)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -236,7 +237,19 @@ mecto.caps <- mecto.caps[,-c(9:12)]
 ecto.list <- split(mecto.caps, mecto.caps$Ecto)
 
 # Create vector for site and drop from list
-site.vec <- as.numeric(factor(ecto.list[[1]]$Site))
+site.vec <- as.integer(factor(ecto.list[[1]]$Site))
+tag.id <- 1:length(site.vec)
+
+# Create matrix of id's per site
+taglist <- list()
+for(i in 1:length(unique(site.vec))){
+  taglist[[i]] <- print(tag.id[site.vec==i])
+}
+
+tagmat <- t(ldply(taglist, rbind))
+
+# Vector of hosts per site
+hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 
 ecto.list <- lapply(ecto.list, 
                     function(x) x <- select(x, -c(Site, Ecto, Tag)))
@@ -251,35 +264,46 @@ cat("
     model{
     # Define hyperpriors
     
+    mean.a0 ~ dunif(0,1)
+    a0.mean <- log(mean.a0)-log(1-mean.a0)
+    tau.a0 ~ dgamma(0.1, 0.1)
+    
+    mean.b0 ~ dunif(0,1)
+    b0.mean <- log(mean.b0)-log(1-mean.b0)
+    tau.b0 ~ dgamma(0.1, 0.1)
+    
+    mean.c0 ~ dunif(0,1)
+    c0.mean <- log(mean.c0)-log(1-mean.c0)
+    tau.c0 ~ dgamma(0.1, 0.1)
+    
     # Priors
     for(i in 1:necto){
     
-      a0[i]
+      a0[i] ~ dnorm(a0.mean, tau.a0)
       
-      b0[i]
+      b0[i] ~ dnorm(b0.mean, tau.b0)
       
-      c0[i]
+      c0[i] ~ dnorm(c0.mean, tau.c0)
     
       # Occupancy model: Site
       for(j in 1:nsite){
       
         logit(psi[j,i]) <- a0[i]
         Z[j,i] ~ dbern(psi[j,i])
-    
+
         # Occupancy model: Host
-        for(k in 1:nind){
+        for(k in tagmat[1:hostvec[j],j]){
         
-          logit(theta[k[site.vec==j], i]) <- b0[i]
-          mu.theta[k[site.vec==j], i] <- theta[k[site.vec==j],i]*Z[j,i]
-          Y[k[site.vec==j],i] ~ dbern(mu.theta[k[site.vec==j], i])
+          logit(theta[k,i]) <- b0[i]
+          mu.theta[k,i] <- theta[k,i]*Z[j,i]
+          Y[k,i] ~ dbern(mu.theta[k,i])
     
           # Detection model
-          for(l in 1:ncap){
+          for(l in 1:ncap[k]){
           
-          logit(p[k[site.vec==j],l,i]) <- c0[i]
-          mu.p[k[site.vec==j],l,i] <- p[k[site.vec==j],l,i]*
-                                      theta[k[site.vec==j],i]
-          obs[k[site.vec==j],l,i] ~ dbern(mu.p[k[site.vec==j],l,i])
+          logit(p[k,l,i]) <- c0[i]
+          mu.p[k,l,i] <- p[k,l,i]*theta[k,i]
+          obs[k,l,i] ~ dbern(mu.p[k,l,i])
     
           }
         }
@@ -287,3 +311,24 @@ cat("
     }
     }
     ", file="ectomod.txt")
+
+# Set up model --------------------------
+# Define no. of ectos, sites, hosts, etc.
+necto <- length(unique(mecto.caps$Ecto))
+
+nsite <- length(unique(site.vec))
+
+ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
+
+# Define data to send and params to keep
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat, hostvec = hostvec)
+
+params <- c('a0', 'b0', 'c0', 'psi', 'theta', 'p', 'Z', 'Y')
+
+# Init values for markov chains drawn from priors
+
+# Send model to JAGS
+model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
+              parameters.to.save = params, n.burnin = 1000, 
+              n.iter = 5000, n.thin = 3)
