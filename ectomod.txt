@@ -33,15 +33,13 @@
         for(k in tagmat[1:hostvec[j],j]){
         
           logit(theta[k,i]) <- b0[i]
-          mu.theta[k,i] <- theta[k,i]*Z[j,i]
-          Y[k,i] ~ dbern(mu.theta[k,i])
+          Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
     
           # Detection model
           for(l in 1:ncap[k]){
           
           logit(p[k,l,i]) <- c0[i]
-          mu.p[k,l,i] <- p[k,l,i]*theta[k,i]
-          obs[k,l,i] ~ dbern(mu.p[k,l,i])
+          obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
     
           }
         }

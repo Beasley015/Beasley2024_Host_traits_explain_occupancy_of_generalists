@@ -246,18 +246,20 @@ for(i in 1:length(unique(site.vec))){
   taglist[[i]] <- print(tag.id[site.vec==i])
 }
 
+library(plyr)
 tagmat <- t(ldply(taglist, rbind))
+detach('package:plyr', unload = T)
 
 # Vector of hosts per site
 hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 
-ecto.list <- lapply(ecto.list, 
+ecto.list2 <- lapply(ecto.list, 
                     function(x) x <- select(x, -c(Site, Ecto, Tag)))
 
 # Coerce to array
-ecto.ar <- array(as.numeric(unlist(ecto.list)), 
-                 dim=c(nrow(ecto.list[[1]]), ncol(ecto.list[[1]]), 
-                       length(ecto.list)))
+ecto.ar <- array(as.numeric(unlist(ecto.list2)), 
+                 dim=c(nrow(ecto.list2[[1]]), ncol(ecto.list2[[1]]), 
+                       length(ecto.list2)))
 
 # Write model -------------------------
 cat("
@@ -295,15 +297,13 @@ cat("
         for(k in tagmat[1:hostvec[j],j]){
         
           logit(theta[k,i]) <- b0[i]
-          mu.theta[k,i] <- theta[k,i]*Z[j,i]
-          Y[k,i] ~ dbern(mu.theta[k,i])
+          Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
     
           # Detection model
           for(l in 1:ncap[k]){
           
           logit(p[k,l,i]) <- c0[i]
-          mu.p[k,l,i] <- p[k,l,i]*theta[k,i]
-          obs[k,l,i] ~ dbern(mu.p[k,l,i])
+          obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
     
           }
         }
@@ -326,9 +326,40 @@ datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
 
 params <- c('a0', 'b0', 'c0', 'psi', 'theta', 'p', 'Z', 'Y')
 
-# Init values for markov chains drawn from priors
+# Init values
+site.occ <- mecto.smol %>%
+  dplyr::select(Site, Ecto, Occ) %>%
+  filter(is.na(Ecto) == F) %>%
+  distinct() %>%
+  arrange(Site) %>%
+  pivot_wider(names_from = Ecto, values_from = Occ)
+
+site.occ[is.na(site.occ)] <- 0
+site.occ <- site.occ[,order(colnames(site.occ))]
+sitemax <- as.matrix(site.occ[,-16])
+
+# Known presences per host
+hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)
+
+inits <- function(){
+  inits <- list(
+    Z = sitemax,
+    Y = hostmax
+  )
+}
 
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, n.burnin = 1000, 
-              n.iter = 5000, n.thin = 3)
+              parameters.to.save = params, inits = inits, n.burnin = 3000, 
+              n.iter = 6000, n.thin = 3)
+
+# Save model
+saveRDS(model, file = "ectomod.rds")
+
+# Prelim results ----------------------
+# Look at site occupancy
+z <- model$BUGSoutput$sims.list$Z
+apply(z, c(2,3), mean)
+
+y <- model$BUGSoutput$sims.list$Y
+apply(y, c(2,3), mean)
