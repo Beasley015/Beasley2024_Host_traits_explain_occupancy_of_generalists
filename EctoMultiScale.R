@@ -261,6 +261,20 @@ ecto.ar <- array(as.numeric(unlist(ecto.list2)),
                  dim=c(nrow(ecto.list2[[1]]), ncol(ecto.list2[[1]]), 
                        length(ecto.list2)))
 
+# Site covariate: Vertical complexity -----------------------
+
+# Site covariate: Cover types -------------------------
+
+# Host covariate: Species -----------------------
+
+# Host covariate: Adj. body mass -----------------------
+
+# Host covariate: Sex -------------------------
+
+# Detection covariate: capture no. ---------------------
+
+# Detection covariate: Julian date -----------------------
+
 # Write model -------------------------
 cat("
     model{
@@ -324,7 +338,7 @@ ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat, hostvec = hostvec)
 
-params <- c('a0', 'b0', 'c0', 'psi', 'theta', 'p', 'Z', 'Y')
+params <- c('a0', 'b0', 'c0', 'psi', 'theta', 'p')
 
 # Init values
 site.occ <- mecto.smol %>%
@@ -350,8 +364,8 @@ inits <- function(){
 
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, inits = inits, n.burnin = 3000, 
-              n.iter = 6000, n.thin = 3)
+              parameters.to.save = params, inits = inits, n.burnin = 4000, 
+              n.iter = 10000, n.thin = 3)
 
 # Save model
 saveRDS(model, file = "ectomod.rds")
@@ -361,5 +375,10 @@ saveRDS(model, file = "ectomod.rds")
 z <- model$BUGSoutput$sims.list$Z
 apply(z, c(2,3), mean)
 
+# Host occupancy
 y <- model$BUGSoutput$sims.list$Y
 apply(y, c(2,3), mean)
+
+# Overall detection probs
+p <- apply(model$BUGSoutput$sims.list$p, c(2:4), mean)
+hist(p)
