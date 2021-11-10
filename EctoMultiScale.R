@@ -178,7 +178,7 @@ ggplot(data = n.host, aes(x = hosts, fill = Order))+
 # Clean data
 mecto.clean <- mamm.ecto %>%
   filter(!(SampleNo. != "" & is.na(Species) == T)) %>%
-  filter(Tag != "RECAP")
+  filter(Tag != "RECAP" & Tag != "DESC")
 
 # Select columns and add occupancy column
 mecto.smol <- mecto.clean %>%
@@ -266,14 +266,19 @@ ecto.ar <- array(as.numeric(unlist(ecto.list2)),
 # Site covariate: Cover types -------------------------
 
 # Host covariate: Species -----------------------
+# Get species abbrev of each host
+host.spec <- mecto.clean %>%
+  select(Tag, Abbrev) %>%
+  distinct() 
+
+# Convert to factor
+hostspec <- factor(host.spec$Abbrev, levels = unique(host.spec$Abbrev))
 
 # Host covariate: Adj. body mass -----------------------
 
 # Host covariate: Sex -------------------------
 
-# Detection covariate: capture no. ---------------------
-
-# Detection covariate: Julian date -----------------------
+# Detection covariate: Julian date? -----------------------
 
 # Write model -------------------------
 cat("
@@ -292,14 +297,23 @@ cat("
     c0.mean <- log(mean.c0)-log(1-mean.c0)
     tau.c0 ~ dgamma(0.1, 0.1)
     
+    mean.c1 ~ dunif(0,1)
+    c1.mean <- log(mean.c1)-log(1-mean.c1)
+    tau.c1 ~ dgamma(0.1, 0.1)
+    
     # Priors
     for(i in 1:necto){
     
       a0[i] ~ dnorm(a0.mean, tau.a0)
       
       b0[i] ~ dnorm(b0.mean, tau.b0)
+      b1[i,1] <- 0
+      for(s in 2:K){
+        b1[i,s] ~ dnorm(0, 1)
+      }
       
       c0[i] ~ dnorm(c0.mean, tau.c0)
+      c1[i] ~ dnorm(c1.mean, tau.c1)
     
       # Occupancy model: Site
       for(j in 1:nsite){
@@ -310,13 +324,13 @@ cat("
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
         
-          logit(theta[k,i]) <- b0[i]
+          logit(theta[k,i]) <- b0[i] + b1[i,host[k]]
           Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
     
           # Detection model
           for(l in 1:ncap[k]){
           
-          logit(p[k,l,i]) <- c0[i]
+          logit(p[k,l,i]) <- c0[i] + c1[i]*l
           obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
     
           }
@@ -336,9 +350,10 @@ ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
 
 # Define data to send and params to keep
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
-                 obs = ecto.ar, tagmat = tagmat, hostvec = hostvec)
+                 obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)))
 
-params <- c('a0', 'b0', 'c0', 'psi', 'theta', 'p')
+params <- c('a0', 'b0', 'b1', 'c0', 'c1')
 
 # Init values
 site.occ <- mecto.smol %>%
@@ -364,21 +379,38 @@ inits <- function(){
 
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, inits = inits, n.burnin = 4000, 
+              parameters.to.save = params, inits = inits, n.burnin = 4000,
               n.iter = 10000, n.thin = 3)
 
 # Save model
 saveRDS(model, file = "ectomod.rds")
 
 # Prelim results ----------------------
-# Look at site occupancy
-z <- model$BUGSoutput$sims.list$Z
-apply(z, c(2,3), mean)
+# Effect of host spec
+b1 <- model$BUGSoutput$sims.list$b1
 
-# Host occupancy
-y <- model$BUGSoutput$sims.list$Y
-apply(y, c(2,3), mean)
+b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.025))
+colnames(b1lo) <- levels(hostspec)
+b1lo$Ecto <- sort(unique(mecto.caps$Ecto))
 
-# Overall detection probs
-p <- apply(model$BUGSoutput$sims.list$p, c(2:4), mean)
-hist(p)
+b1lo <- pivot_longer(b1lo, cols = -Ecto, 
+                     names_to = "host", values_to = "lo")
+
+b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.975))
+colnames(b1hi) <- levels(hostspec)
+b1hi$Ecto <- sort(unique(mecto.caps$Ecto))
+
+b1hi <- pivot_longer(b1hi, cols = -Ecto, 
+                     names_to = "host", values_to = "hi")
+
+hilo <- inner_join(b1hi, b1lo, by = c("host", "Ecto"))
+# will need to re-run model for each host spec but at least
+# prelim stuff makes sense
+
+# Effect of capture no.
+c1 <- model$BUGSoutput$sims.list$c1
+quantile(c1, c(0.025, 0.975))
+capno <- data.frame(mean = apply(c1, 2, mean), 
+                    lo = apply(c1, 2, quantile, 0.025), 
+                    hi = apply(c1, 2, quantile, 0.975))
+# doesn't appear to affect detectability

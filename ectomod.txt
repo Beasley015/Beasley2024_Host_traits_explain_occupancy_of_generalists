@@ -14,14 +14,23 @@
     c0.mean <- log(mean.c0)-log(1-mean.c0)
     tau.c0 ~ dgamma(0.1, 0.1)
     
+    mean.c1 ~ dunif(0,1)
+    c1.mean <- log(mean.c1)-log(1-mean.c1)
+    tau.c1 ~ dgamma(0.1, 0.1)
+    
     # Priors
     for(i in 1:necto){
     
       a0[i] ~ dnorm(a0.mean, tau.a0)
       
       b0[i] ~ dnorm(b0.mean, tau.b0)
+      b1[i,1] <- 0
+      for(s in 2:K){
+        b1[i,s] ~ dnorm(0, 1)
+      }
       
       c0[i] ~ dnorm(c0.mean, tau.c0)
+      c1[i] ~ dnorm(c1.mean, tau.c1)
     
       # Occupancy model: Site
       for(j in 1:nsite){
@@ -32,13 +41,13 @@
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
         
-          logit(theta[k,i]) <- b0[i]
+          logit(theta[k,i]) <- b0[i] + b1[i,host[k]]
           Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
     
           # Detection model
           for(l in 1:ncap[k]){
           
-          logit(p[k,l,i]) <- c0[i]
+          logit(p[k,l,i]) <- c0[i] + c1[i]*l
           obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
     
           }
