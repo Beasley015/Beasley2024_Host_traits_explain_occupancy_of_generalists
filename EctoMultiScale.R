@@ -250,9 +250,6 @@ library(plyr)
 tagmat <- t(ldply(taglist, rbind))
 detach('package:plyr', unload = T)
 
-# Vector of hosts per site
-hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
-
 ecto.list2 <- lapply(ecto.list, 
                     function(x) x <- select(x, -c(Site, Ecto, Tag)))
 
@@ -261,9 +258,19 @@ ecto.ar <- array(as.numeric(unlist(ecto.list2)),
                  dim=c(nrow(ecto.list2[[1]]), ncol(ecto.list2[[1]]), 
                        length(ecto.list2)))
 
-# Site covariate: Vertical complexity -----------------------
+# Site covariate: Veg -----------------------
+veg.site <- veg.2020 %>%
+  group_by(Site, Habitat) %>%
+  summarise(across(.cols = c(Canopy:X.DeadVeg), mean, na.rm = T))
 
-# Site covariate: Cover types -------------------------
+veg.pc <- prcomp(veg.site[,4:15])
+
+veg.cov <- veg.pc$x[,1]
+
+veg.cov <- as.vector(scale(vert.cov))
+
+# Site covariate: host abund -----------------------
+hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 
 # Host covariate: Species -----------------------
 # Get species abbrev of each host
@@ -275,8 +282,29 @@ host.spec <- mecto.clean %>%
 hostspec <- factor(host.spec$Abbrev, levels = unique(host.spec$Abbrev))
 
 # Host covariate: Adj. body mass -----------------------
+host.mass <- mecto.clean %>%
+  select(Tag, Abbrev, Mass) %>%
+  group_by(Tag, Abbrev) %>%
+  summarise(Mass = mean(Mass, na.rm = T)) %>%
+  ungroup()
+
+host.z <- host.mass %>%
+  group_by(Abbrev) %>%
+  mutate(mass.scaled = as.vector(scale(Mass)))
+
+hostmass <- host.z$mass.scaled
 
 # Host covariate: Sex -------------------------
+host.sex <- mecto.clean %>%
+  select(Tag, Abbrev, Sex) %>%
+  group_by (Tag, Abbrev) %>%
+  distinct()
+
+hostsex <- host.sex$Sex
+hostsex[hostsex == ""] <- NA
+hostsex <- as.numeric(factor(hostsex))-1
+
+# Ear length for funsies? ----------------------
 
 # Detection covariate: Julian date? -----------------------
 
@@ -289,9 +317,25 @@ cat("
     a0.mean <- log(mean.a0)-log(1-mean.a0)
     tau.a0 ~ dgamma(0.1, 0.1)
     
+    mean.a1 ~ dunif(0,1)
+    a1.mean <- log(mean.a1)-log(1-mean.a1)
+    tau.a1 ~ dgamma(0.1, 0.1)
+    
+    mean.a2 ~ dunif(0,1)
+    a2.mean <- log(mean.a2)-log(1-mean.a2)
+    tau.a2 ~ dgamma(0.1, 0.1)
+    
     mean.b0 ~ dunif(0,1)
     b0.mean <- log(mean.b0)-log(1-mean.b0)
     tau.b0 ~ dgamma(0.1, 0.1)
+    
+    mean.b2 ~ dunif(0,1)
+    b2.mean <- log(mean.b2)-log(1-mean.b2)
+    tau.b2 ~ dgamma(0.1, 0.1)
+    
+    mean.b3 ~ dunif(0,1)
+    b3.mean <- log(mean.b3)-log(1-mean.b3)
+    tau.b3 ~ dgamma(0.1, 0.1)
     
     mean.c0 ~ dunif(0,1)
     c0.mean <- log(mean.c0)-log(1-mean.c0)
@@ -301,16 +345,22 @@ cat("
     c1.mean <- log(mean.c1)-log(1-mean.c1)
     tau.c1 ~ dgamma(0.1, 0.1)
     
+    probs ~ dunif(0,1)
+    
     # Priors
     for(i in 1:necto){
     
       a0[i] ~ dnorm(a0.mean, tau.a0)
+      a1[i] ~ dnorm(a1.mean, tau.a1)
+      a2[i] ~ dnorm(a2.mean, tau.a2)
       
       b0[i] ~ dnorm(b0.mean, tau.b0)
       b1[i,1] <- 0
       for(s in 2:K){
         b1[i,s] ~ dnorm(0, 1)
       }
+      b2[i] ~ dnorm(b2.mean, tau.b2)
+      b3[i] ~ dnorm(b3.mean, tau.b3)
       
       c0[i] ~ dnorm(c0.mean, tau.c0)
       c1[i] ~ dnorm(c1.mean, tau.c1)
@@ -318,14 +368,16 @@ cat("
       # Occupancy model: Site
       for(j in 1:nsite){
       
-        logit(psi[j,i]) <- a0[i]
+        logit(psi[j,i]) <- a0[i] + a1[i]*veg[j] + a2[i]*abund[j]
         Z[j,i] ~ dbern(psi[j,i])
 
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
-        
-          logit(theta[k,i]) <- b0[i] + b1[i,host[k]]
+          logit(theta[k,i]) <- b0[i] + b1[i,host[k]] + b2[i]*mass[k]
+                                      + b3[i]*sex[k]
           Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
+          
+          sex[k] ~ dbern(probs)
     
           # Detection model
           for(l in 1:ncap[k]){
@@ -351,9 +403,11 @@ ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
 # Define data to send and params to keep
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
-                 host = hostspec, K = length(unique(hostspec)))
+                 host = hostspec, K = length(unique(hostspec)), 
+                 veg = veg.cov, abund = as.vector(scale(hostvec)),
+                 mass = hostmass, sex = hostsex)
 
-params <- c('a0', 'b0', 'b1', 'c0', 'c1')
+params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1')
 
 # Init values
 site.occ <- mecto.smol %>%
@@ -380,12 +434,26 @@ inits <- function(){
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
               parameters.to.save = params, inits = inits, n.burnin = 4000,
-              n.iter = 10000, n.thin = 3)
+              n.iter = 10000, n.thin = 5)
 
 # Save model
 saveRDS(model, file = "ectomod.rds")
 
 # Prelim results ----------------------
+# Veg vertical structure
+a1 <- model$BUGSoutput$sims.list$a1
+
+data.frame(mean = apply(a1, 2, mean),
+           lo = apply(a1, 2, quantile, 0.025),
+           hi = apply(a1, 2, quantile, 0.975))
+
+# Host abund
+a2 <- model$BUGSoutput$sims.list$a2
+
+data.frame(mean = apply(a2, 2, mean),
+           lo = apply(a2, 2, quantile, 0.025),
+           hi = apply(a2, 2, quantile, 0.975))
+
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
 
@@ -406,6 +474,13 @@ b1hi <- pivot_longer(b1hi, cols = -Ecto,
 hilo <- inner_join(b1hi, b1lo, by = c("host", "Ecto"))
 # will need to re-run model for each host spec but at least
 # prelim stuff makes sense
+
+# host mass
+b2 <- model$BUGSoutput$sims.list$b2
+mass.results <- data.frame(mean = colMeans(b2),
+                           lo = apply(b2, 2, quantile, 0.025),
+                           hi = apply(b2, 2, quantile, 0.975))
+
 
 # Effect of capture no.
 c1 <- model$BUGSoutput$sims.list$c1
