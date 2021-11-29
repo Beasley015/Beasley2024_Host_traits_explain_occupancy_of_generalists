@@ -215,20 +215,25 @@ mecto.days <- mecto.full %>%
   select(Tag, Site, Ecto, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`) %>%
   mutate_at(.vars = '4':'12', .funs = function(x) case_when(x > 1 ~ 1,
                                                             x == 1 ~ 1,
-                                                            x == 0 ~ 0)) %>%
+                                                          x == 0 ~ 0)) %>%
   ungroup()
 
 # Shift non-0 values left to convert to capture no.
-caplist <- list()
-for(i in 1:nrow(mecto.days)){
-  x <- mecto.days[i,4:12]
-  y <- c(x[!is.na(x)], x[is.na(x)])
-  y <- data.frame(as.list(y))
-  colnames(y) <- 1:9
+cap.convert <- function(dat, cols){
+  caplist <- list()
+  for(i in 1:nrow(dat)){
+    x <- dat[i,cols]
+    y <- c(x[!is.na(x)], x[is.na(x)])
+    y <- data.frame(as.list(y))
+    colnames(y) <- 1:9
 
-  z <- cbind(mecto.days[i,1:3], y)
-  caplist[[i]] <- z
+    z <- cbind(mecto.days[i,1:3], y)
+    caplist[[i]] <- z
+  }
+  return(caplist)
 }
+
+caplist <- cap.convert(mecto.days, 4:12)
 
 mecto.caps <- do.call("rbind", caplist)
 mecto.caps <- mecto.caps[,-c(9:12)]
@@ -258,16 +263,23 @@ ecto.ar <- array(as.numeric(unlist(ecto.list2)),
                  dim=c(nrow(ecto.list2[[1]]), ncol(ecto.list2[[1]]), 
                        length(ecto.list2)))
 
-# Site covariate: Veg -----------------------
+# Site covariate: Veg cover type -----------------------
 veg.site <- veg.2020 %>%
   group_by(Site, Habitat) %>%
   summarise(across(.cols = c(Canopy:X.DeadVeg), mean, na.rm = T))
 
-veg.pc <- prcomp(veg.site[,4:15])
+comp.pc <- prcomp(veg.site[,10:15])
 
-veg.cov <- veg.pc$x[,1]
+comp.cov <- comp.pc$x[,1]
 
-veg.cov <- as.vector(scale(vert.cov))
+comp.cov <- as.vector(scale(comp.cov))
+
+# Site covariate: Veg complexity -----------------
+height.pc <- prcomp(veg.site[,4:9])
+
+height.cov <- height.pc$x[,1]
+
+height.cov <- as.vector(scale(height.cov))
 
 # Site covariate: host abund -----------------------
 hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
@@ -304,9 +316,10 @@ hostsex <- host.sex$Sex
 hostsex[hostsex == ""] <- NA
 hostsex <- as.numeric(factor(hostsex))-1
 
-# Ear length for funsies? ----------------------
-
 # Detection covariate: Julian date? -----------------------
+mecto.full %>%
+  left_join(mecto.clean, by = c("Tag", "Day")) %>%
+  dplyr::select(Tag, Day, Date)
 
 # Write model -------------------------
 cat("
@@ -368,17 +381,18 @@ cat("
       # Occupancy model: Site
       for(j in 1:nsite){
       
-        logit(psi[j,i]) <- a0[i] + a1[i]*veg[j] + a2[i]*abund[j]
+        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*abund[j]
         Z[j,i] ~ dbern(psi[j,i])
 
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
+          # May need to create matrix of host sex
+          sex[k,i] ~ dbern(probs)
+        
           logit(theta[k,i]) <- b0[i] + b1[i,host[k]] + b2[i]*mass[k]
-                                      + b3[i]*sex[k]
+                                      + b3[i]*sex[k,i]
           Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
           
-          sex[k] ~ dbern(probs)
-    
           # Detection model
           for(l in 1:ncap[k]){
           
@@ -404,8 +418,9 @@ ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
                  host = hostspec, K = length(unique(hostspec)), 
-                 veg = veg.cov, abund = as.vector(scale(hostvec)),
-                 mass = hostmass, sex = hostsex)
+                 comp = height.cov, abund = as.vector(scale(hostvec)),
+                 mass = hostmass, cover = comp.cov, 
+                 sex = matrix(rep(hostsex, necto), ncol = necto))
 
 params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1')
 
@@ -439,15 +454,18 @@ model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
 # Save model
 saveRDS(model, file = "ectomod.rds")
 
+# Load model
+model <- readRDS("ectomod.rds")
+
 # Prelim results ----------------------
-# Veg vertical structure
+# Veg composition
 a1 <- model$BUGSoutput$sims.list$a1
 
 data.frame(mean = apply(a1, 2, mean),
            lo = apply(a1, 2, quantile, 0.025),
            hi = apply(a1, 2, quantile, 0.975))
 
-# Host abund
+# Total mammalian abundance
 a2 <- model$BUGSoutput$sims.list$a2
 
 data.frame(mean = apply(a2, 2, mean),
@@ -472,20 +490,26 @@ b1hi <- pivot_longer(b1hi, cols = -Ecto,
                      names_to = "host", values_to = "hi")
 
 hilo <- inner_join(b1hi, b1lo, by = c("host", "Ecto"))
-# will need to re-run model for each host spec but at least
-# prelim stuff makes sense
+# Make interval plot for each ectoparasite species
 
 # host mass
 b2 <- model$BUGSoutput$sims.list$b2
-mass.results <- data.frame(mean = colMeans(b2),
-                           lo = apply(b2, 2, quantile, 0.025),
-                           hi = apply(b2, 2, quantile, 0.975))
 
+data.frame(mean = colMeans(b2),
+           lo = apply(b2, 2, quantile, 0.025),
+           hi = apply(b2, 2, quantile, 0.975))
+
+# host sex
+b3 <- model$BUGSoutput$sims.list$b3
+
+data.frame(mean = apply(b3, 2, mean),
+           lo = apply(b3, 2, quantile, 0.025),
+           hi = apply(b3, 2, quantile, 0.975))
 
 # Effect of capture no.
 c1 <- model$BUGSoutput$sims.list$c1
-quantile(c1, c(0.025, 0.975))
-capno <- data.frame(mean = apply(c1, 2, mean), 
-                    lo = apply(c1, 2, quantile, 0.025), 
-                    hi = apply(c1, 2, quantile, 0.975))
+
+data.frame(mean = apply(c1, 2, mean), 
+           lo = apply(c1, 2, quantile, 0.025), 
+           hi = apply(c1, 2, quantile, 0.975))
 # doesn't appear to affect detectability
