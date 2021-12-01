@@ -23,6 +23,12 @@ set.seed(15)
 
 # Clean data ------------------------
 # Mammals
+for(i in 1:length(mamm.raw$Date)){
+  if(nchar(mamm.raw$Date[i]) < 10){
+    mamm.raw$Date[i] <- paste("0", mamm.raw$Date[i], sep = "")
+  }
+}
+
 mamm.2020 <- mamm.raw %>%
   mutate(Date = as.Date(Date, format = "%d/%m/%Y")) %>%
   filter(Date > as.Date("2020-01-01")) %>%
@@ -194,8 +200,7 @@ combos <- distinct(expand_grid(mecto.smol$Tag, mecto.smol$Ecto))
 
 mecto.joined <- mecto.smol %>%
   full_join(combos, by = c("Tag" = "mecto.smol$Tag", 
-                           "Ecto" ="mecto.smol$Ecto")) %>%
-  filter(is.na(Ecto) == F)
+                           "Ecto" ="mecto.smol$Ecto"))
   
 combos2 <- mecto.joined %>%
   group_by(Tag) %>%
@@ -216,10 +221,11 @@ mecto.days <- mecto.full %>%
   mutate_at(.vars = '4':'12', .funs = function(x) case_when(x > 1 ~ 1,
                                                             x == 1 ~ 1,
                                                           x == 0 ~ 0)) %>%
-  ungroup()
+  ungroup() %>%
+  filter(!is.na(Ecto))
 
 # Shift non-0 values left to convert to capture no.
-cap.convert <- function(dat, cols){
+cap.convert <- function(dat, cols, cols2){
   caplist <- list()
   for(i in 1:nrow(dat)){
     x <- dat[i,cols]
@@ -227,16 +233,16 @@ cap.convert <- function(dat, cols){
     y <- data.frame(as.list(y))
     colnames(y) <- 1:9
 
-    z <- cbind(mecto.days[i,1:3], y)
+    z <- cbind(dat[i,cols2], y)
     caplist[[i]] <- z
   }
   return(caplist)
 }
 
-caplist <- cap.convert(mecto.days, 4:12)
+caplist <- cap.convert(mecto.days, 4:12, 1:3)
 
 mecto.caps <- do.call("rbind", caplist)
-mecto.caps <- mecto.caps[,-c(9:12)]
+mecto.caps <- mecto.caps[,-12]
 
 # Convert to list
 ecto.list <- split(mecto.caps, mecto.caps$Ecto)
@@ -260,7 +266,7 @@ ecto.list2 <- lapply(ecto.list,
 
 # Coerce to array
 ecto.ar <- array(as.numeric(unlist(ecto.list2)), 
-                 dim=c(nrow(ecto.list2[[1]]), ncol(ecto.list2[[1]]), 
+                 dim=c(nrow(ecto.list2[[1]]), 8, 
                        length(ecto.list2)))
 
 # Site covariate: Veg cover type -----------------------
@@ -288,7 +294,8 @@ hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 # Get species abbrev of each host
 host.spec <- mecto.clean %>%
   select(Tag, Abbrev) %>%
-  distinct() 
+  distinct() %>%
+  arrange(Tag)
 
 # Convert to factor
 hostspec <- factor(host.spec$Abbrev, levels = unique(host.spec$Abbrev))
@@ -317,9 +324,20 @@ hostsex[hostsex == ""] <- NA
 hostsex <- as.numeric(factor(hostsex))-1
 
 # Detection covariate: Julian date? -----------------------
-mecto.full %>%
-  left_join(mecto.clean, by = c("Tag", "Day")) %>%
-  dplyr::select(Tag, Day, Date)
+dates.frame <- mecto.clean %>%
+  mutate(julian = format(Date, "%j")) %>%
+  mutate(julian = as.vector(scale(as.numeric(julian)))) %>%
+  dplyr::select(Tag, Day, julian) %>%
+  distinct() %>%
+  pivot_wider(names_from = Day, values_from = julian) %>%
+  arrange(Tag) %>%
+  relocate(Tag, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`)
+
+dateslist <- cap.convert(dates.frame, 2:10, 1)
+
+dates <- do.call("rbind", dateslist)
+dates <- dates[,c(-1, -10)]
+  
 
 # Write model -------------------------
 cat("
@@ -333,10 +351,6 @@ cat("
     mean.a1 ~ dunif(0,1)
     a1.mean <- log(mean.a1)-log(1-mean.a1)
     tau.a1 ~ dgamma(0.1, 0.1)
-    
-    mean.a2 ~ dunif(0,1)
-    a2.mean <- log(mean.a2)-log(1-mean.a2)
-    tau.a2 ~ dgamma(0.1, 0.1)
     
     mean.b0 ~ dunif(0,1)
     b0.mean <- log(mean.b0)-log(1-mean.b0)
@@ -358,6 +372,10 @@ cat("
     c1.mean <- log(mean.c1)-log(1-mean.c1)
     tau.c1 ~ dgamma(0.1, 0.1)
     
+    mean.c2 ~ dunif(0,1)
+    c2.mean <- log(mean.c2)-log(1-mean.c2)
+    tau.c2 ~ dgamma(0.1, 0.1)
+    
     probs ~ dunif(0,1)
     
     # Priors
@@ -365,7 +383,6 @@ cat("
     
       a0[i] ~ dnorm(a0.mean, tau.a0)
       a1[i] ~ dnorm(a1.mean, tau.a1)
-      a2[i] ~ dnorm(a2.mean, tau.a2)
       
       b0[i] ~ dnorm(b0.mean, tau.b0)
       b1[i,1] <- 0
@@ -377,11 +394,12 @@ cat("
       
       c0[i] ~ dnorm(c0.mean, tau.c0)
       c1[i] ~ dnorm(c1.mean, tau.c1)
+      c2[i] ~ dnorm(c2.mean, tau.c2)
     
       # Occupancy model: Site
       for(j in 1:nsite){
       
-        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*abund[j]
+        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j]
         Z[j,i] ~ dbern(psi[j,i])
 
         # Occupancy model: Host
@@ -396,8 +414,8 @@ cat("
           # Detection model
           for(l in 1:ncap[k]){
           
-          logit(p[k,l,i]) <- c0[i] + c1[i]*l
-          obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
+            logit(p[k,l,i]) <- c0[i] + c1[i]*l + c2[i]*julian[k,l]
+            obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
     
           }
         }
@@ -418,23 +436,25 @@ ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
                  host = hostspec, K = length(unique(hostspec)), 
-                 comp = height.cov, abund = as.vector(scale(hostvec)),
                  mass = hostmass, cover = comp.cov, 
-                 sex = matrix(rep(hostsex, necto), ncol = necto))
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
 
-params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1')
+params <- c('a0', 'a1', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1', 'c2')
 
 # Init values
-site.occ <- mecto.smol %>%
+site.occ <- mecto.caps %>%
+  dplyr::select(-Tag) %>%
+  rowwise() %>%
+  mutate(Occ = max(c_across(`1`:`8`), na.rm = T)) %>%
   dplyr::select(Site, Ecto, Occ) %>%
-  filter(is.na(Ecto) == F) %>%
   distinct() %>%
+  group_by(Site, Ecto) %>%
+  summarise(Occ = max(Occ)) %>%
   arrange(Site) %>%
   pivot_wider(names_from = Ecto, values_from = Occ)
 
-site.occ[is.na(site.occ)] <- 0
-site.occ <- site.occ[,order(colnames(site.occ))]
-sitemax <- as.matrix(site.occ[,-16])
+sitemax <- as.matrix(site.occ[,-1])
 
 # Known presences per host
 hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)
@@ -448,8 +468,8 @@ inits <- function(){
 
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, inits = inits, n.burnin = 4000,
-              n.iter = 10000, n.thin = 5)
+              parameters.to.save = params, inits = inits, n.burnin = 5000,
+              n.iter = 10000, n.thin = 10)
 
 # Save model
 saveRDS(model, file = "ectomod.rds")
@@ -459,18 +479,16 @@ model <- readRDS("ectomod.rds")
 
 # Prelim results ----------------------
 # Veg composition
-a1 <- model$BUGSoutput$sims.list$a1
+a1 <- model$BUGSoutput$sims.list$a1 # Might need to revisit this cov
 
-data.frame(mean = apply(a1, 2, mean),
+a1s <- data.frame(mean = apply(a1, 2, mean),
            lo = apply(a1, 2, quantile, 0.025),
            hi = apply(a1, 2, quantile, 0.975))
 
-# Total mammalian abundance
-a2 <- model$BUGSoutput$sims.list$a2
-
-data.frame(mean = apply(a2, 2, mean),
-           lo = apply(a2, 2, quantile, 0.025),
-           hi = apply(a2, 2, quantile, 0.975))
+ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
+  geom_point()+
+  geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_hline(yintercept = 0)
 
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
@@ -490,6 +508,7 @@ b1hi <- pivot_longer(b1hi, cols = -Ecto,
                      names_to = "host", values_to = "hi")
 
 hilo <- inner_join(b1hi, b1lo, by = c("host", "Ecto"))
+hilo[which(hilo$lo > 0 | hilo$hi < 0),]
 # Make interval plot for each ectoparasite species
 
 # host mass
@@ -512,4 +531,12 @@ c1 <- model$BUGSoutput$sims.list$c1
 data.frame(mean = apply(c1, 2, mean), 
            lo = apply(c1, 2, quantile, 0.025), 
            hi = apply(c1, 2, quantile, 0.975))
-# doesn't appear to affect detectability
+# doesn't matter
+
+# Julian date
+c2 <- model$BUGSoutput$sims.list$c2
+
+data.frame(mean = apply(c2, 2, mean), 
+           lo = apply(c2, 2, quantile, 0.025), 
+           hi = apply(c2, 2, quantile, 0.975))
+# seasonality matters sometimes
