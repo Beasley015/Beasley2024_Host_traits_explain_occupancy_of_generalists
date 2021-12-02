@@ -287,6 +287,13 @@ height.cov <- height.pc$x[,1]
 
 height.cov <- as.vector(scale(height.cov))
 
+# Alt veg covariate: pca with everything ----------------
+veg.pc <- prcomp(veg.site[,4:15])
+
+veg.cov <- veg.pc$x[,1]
+
+veg.cov <- as.vector(scale(veg.cov))
+
 # Site covariate: host abund -----------------------
 hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 
@@ -303,6 +310,7 @@ hostspec <- factor(host.spec$Abbrev, levels = unique(host.spec$Abbrev))
 # Host covariate: Adj. body mass -----------------------
 host.mass <- mecto.clean %>%
   select(Tag, Abbrev, Mass) %>%
+  arrange(Tag) %>%
   group_by(Tag, Abbrev) %>%
   summarise(Mass = mean(Mass, na.rm = T)) %>%
   ungroup()
@@ -316,6 +324,7 @@ hostmass <- host.z$mass.scaled
 # Host covariate: Sex -------------------------
 host.sex <- mecto.clean %>%
   select(Tag, Abbrev, Sex) %>%
+  arrange(Tag) %>%
   group_by (Tag, Abbrev) %>%
   distinct()
 
@@ -352,6 +361,10 @@ cat("
     a1.mean <- log(mean.a1)-log(1-mean.a1)
     tau.a1 ~ dgamma(0.1, 0.1)
     
+    mean.a2 ~ dunif(0,1)
+    a2.mean <- log(mean.a2)-log(1-mean.a2)
+    tau.a2 ~ dgamma(0.1, 0.1)
+    
     mean.b0 ~ dunif(0,1)
     b0.mean <- log(mean.b0)-log(1-mean.b0)
     tau.b0 ~ dgamma(0.1, 0.1)
@@ -383,6 +396,7 @@ cat("
     
       a0[i] ~ dnorm(a0.mean, tau.a0)
       a1[i] ~ dnorm(a1.mean, tau.a1)
+      a2[i] ~ dnorm(a2.mean, tau.a2)
       
       b0[i] ~ dnorm(b0.mean, tau.b0)
       b1[i,1] <- 0
@@ -399,7 +413,7 @@ cat("
       # Occupancy model: Site
       for(j in 1:nsite){
       
-        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j]
+        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*height[j]
         Z[j,i] ~ dbern(psi[j,i])
 
         # Occupancy model: Host
@@ -436,11 +450,11 @@ ncap <- apply(ecto.ar[,,1], 1, function(x) length(na.omit(x)))
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
                  host = hostspec, K = length(unique(hostspec)), 
-                 mass = hostmass, cover = comp.cov, 
+                 mass = hostmass, cover = comp.cov, height = height.cov,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
                  julian = dates)
 
-params <- c('a0', 'a1', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1', 'c2')
+params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1', 'c2')
 
 # Init values
 site.occ <- mecto.caps %>%
@@ -468,8 +482,8 @@ inits <- function(){
 
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, inits = inits, n.burnin = 5000,
-              n.iter = 10000, n.thin = 10)
+              parameters.to.save = params, inits = inits, n.burnin = 7000,
+              n.iter = 15000, n.thin = 12)
 
 # Save model
 saveRDS(model, file = "ectomod.rds")
@@ -486,6 +500,18 @@ a1s <- data.frame(mean = apply(a1, 2, mean),
            hi = apply(a1, 2, quantile, 0.975))
 
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
+  geom_point()+
+  geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_hline(yintercept = 0)
+
+# Veg structure
+a2 <- model$BUGSoutput$sims.list$a2
+
+a2s <- data.frame(mean = apply(a2, 2, mean),
+           lo = apply(a2, 2, quantile, 0.025),
+           hi = apply(a2, 2, quantile, 0.975))
+
+ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)
