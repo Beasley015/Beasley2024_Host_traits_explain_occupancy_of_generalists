@@ -482,7 +482,7 @@ inits <- function(){
 
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, inits = inits, n.burnin = 7000,
+              parameters.to.save = params, inits = inits, n.burnin = 8000,
               n.iter = 15000, n.thin = 12)
 
 # Save model
@@ -496,25 +496,29 @@ model <- readRDS("ectomod.rds")
 a1 <- model$BUGSoutput$sims.list$a1 # Might need to revisit this cov
 
 a1s <- data.frame(mean = apply(a1, 2, mean),
-           lo = apply(a1, 2, quantile, 0.025),
-           hi = apply(a1, 2, quantile, 0.975))
+           lo = apply(a1, 2, quantile, 0.125),
+           hi = apply(a1, 2, quantile, 0.875))
+rownames(a1s) <- colnames(site.occ)[-1]
 
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_hline(yintercept = 0)
+  geom_hline(yintercept = 0)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
 
 # Veg structure
 a2 <- model$BUGSoutput$sims.list$a2
 
 a2s <- data.frame(mean = apply(a2, 2, mean),
-           lo = apply(a2, 2, quantile, 0.025),
-           hi = apply(a2, 2, quantile, 0.975))
+           lo = apply(a2, 2, quantile, 0.125),
+           hi = apply(a2, 2, quantile, 0.875))
+rownames(a2s) <- colnames(site.occ)[-1]
 
 ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_hline(yintercept = 0)
+  geom_hline(yintercept = 0)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
 
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
@@ -540,29 +544,55 @@ hilo[which(hilo$lo > 0 | hilo$hi < 0),]
 # host mass
 b2 <- model$BUGSoutput$sims.list$b2
 
-data.frame(mean = colMeans(b2),
-           lo = apply(b2, 2, quantile, 0.025),
-           hi = apply(b2, 2, quantile, 0.975))
+b2s <- data.frame(mean = colMeans(b2),
+           lo = apply(b2, 2, quantile, 0.125),
+           hi = apply(b2, 2, quantile, 0.875))
+rownames(b2s) <- colnames(site.occ)[-1]
+
+ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
+  geom_point()+
+  geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_hline(yintercept = 0)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
 
 # host sex
 b3 <- model$BUGSoutput$sims.list$b3
 
-data.frame(mean = apply(b3, 2, mean),
-           lo = apply(b3, 2, quantile, 0.025),
-           hi = apply(b3, 2, quantile, 0.975))
+b3s <- data.frame(mean = apply(b3, 2, mean),
+           lo = apply(b3, 2, quantile, 0.125),
+           hi = apply(b3, 2, quantile, 0.875))
+rownames(b3s) <- colnames(site.occ)[-1]
+
+ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
+  geom_point()+
+  geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_hline(yintercept = 0)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
 
 # Effect of capture no.
 c1 <- model$BUGSoutput$sims.list$c1
 
-data.frame(mean = apply(c1, 2, mean), 
-           lo = apply(c1, 2, quantile, 0.025), 
-           hi = apply(c1, 2, quantile, 0.975))
-# doesn't matter
+c1s <- data.frame(mean = apply(c1, 2, mean), 
+           lo = apply(c1, 2, quantile, 0.125), 
+           hi = apply(c1, 2, quantile, 0.875))
+rownames(c1s) <- colnames(site.occ)[-1]
+
+ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
+  geom_point()+
+  geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_hline(yintercept = 0)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
 
 # Julian date
 c2 <- model$BUGSoutput$sims.list$c2
 
-data.frame(mean = apply(c2, 2, mean), 
+c2s <- data.frame(mean = apply(c2, 2, mean), 
            lo = apply(c2, 2, quantile, 0.025), 
            hi = apply(c2, 2, quantile, 0.975))
-# seasonality matters sometimes
+rownames(c2s) <- colnames(site.occ)[-1]
+
+ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
+  geom_point()+
+  geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_hline(yintercept = 0)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
