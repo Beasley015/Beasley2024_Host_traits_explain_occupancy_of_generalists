@@ -483,7 +483,7 @@ inits <- function(){
 # Send model to JAGS
 model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
               parameters.to.save = params, inits = inits, n.burnin = 8000,
-              n.iter = 15000, n.thin = 12)
+              n.iter = 15000, n.thin = 10)
 
 # Save model
 saveRDS(model, file = "ectomod.rds")
