@@ -481,12 +481,12 @@ inits <- function(){
 }
 
 # Send model to JAGS
-model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
-              parameters.to.save = params, inits = inits, n.burnin = 8000,
-              n.iter = 15000, n.thin = 10)
+# model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
+              # parameters.to.save = params, inits = inits, n.burnin = 8000,
+              # n.iter = 15000, n.thin = 10)
 
 # Save model
-saveRDS(model, file = "ectomod.rds")
+# saveRDS(model, file = "ectomod.rds")
 
 # Load model
 model <- readRDS("ectomod.rds")
@@ -504,7 +504,13 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
+  labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
+        panel.grid = element_blank())
+
+# ggsave(filename = "vegcomp75cov.jpeg", width = 9, height = 4, 
+#        units = "in")
 
 # Veg structure
 a2 <- model$BUGSoutput$sims.list$a2
@@ -518,28 +524,66 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
+  labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
+        panel.grid = element_blank())
+
+# ggsave(filename = "vegheight75cov.jpeg", width = 9, height = 4,
+#        units = "in")
 
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
 
-b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.025))
+b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.125))
 colnames(b1lo) <- levels(hostspec)
 b1lo$Ecto <- sort(unique(mecto.caps$Ecto))
 
 b1lo <- pivot_longer(b1lo, cols = -Ecto, 
                      names_to = "host", values_to = "lo")
 
-b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.975))
+b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.875))
 colnames(b1hi) <- levels(hostspec)
 b1hi$Ecto <- sort(unique(mecto.caps$Ecto))
 
 b1hi <- pivot_longer(b1hi, cols = -Ecto, 
                      names_to = "host", values_to = "hi")
 
+b1mean <- as.data.frame(apply(b1, c(2,3), mean))
+colnames(b1mean) <- levels(hostspec)
+b1mean$Ecto <- sort(unique(mecto.caps$Ecto))
+
+b1mean <- pivot_longer(b1mean, cols = -Ecto,
+                       names_to = "host", values_to = "mean")
+
 hilo <- inner_join(b1hi, b1lo, by = c("host", "Ecto"))
+hilo$mean <- b1mean$mean
+
 hilo[which(hilo$lo > 0 | hilo$hi < 0),]
-# Make interval plot for each ectoparasite species
+
+# Make interval plot for each ectoparasite species:
+ecto.specs <- unique(hilo$Ecto)
+
+plotlist <- list()
+for(i in 1:length(ecto.specs)){
+  spec <- hilo[hilo$Ecto == ecto.specs[i],]
+  spec <- spec[spec$host != "PELE",]
+  
+  plotlist[[i]] <- ggplot(data = spec, aes(x = mean, y = host))+
+    geom_point()+
+    geom_errorbar(aes(xmin = lo, xmax = hi))+
+    geom_vline(xintercept = 0, linetype = "dashed")+
+    labs(x = "Coefficient", y = "Host Species", title = ecto.specs[i])+
+    scale_x_continuous(limits = c(-5, 5))+
+    theme_bw(base_size = 12)+
+    theme(panel.grid = element_blank())
+}
+
+# for(i in 1:length(plotlist)){
+#   ggsave(plotlist[[i]], filename = paste("95cihost", i, ".jpeg", 
+#                                          sep = ""), 
+#          width = 5, height = 3, units = "in")
+# }
 
 # host mass
 b2 <- model$BUGSoutput$sims.list$b2
@@ -553,7 +597,13 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
+  labs(x = "Ectoparasite Species", y = "Host Mass Coefficient")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
+        panel.grid = element_blank())
+
+# ggsave(filename = "hostmass75cov.jpeg", width = 9, height = 4,
+#        units = "in")
 
 # host sex
 b3 <- model$BUGSoutput$sims.list$b3
@@ -567,7 +617,13 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
+  labs(x = "Ectoparasite Species", y = "Host Sex Coefficient")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
+        panel.grid = element_blank())
+
+# ggsave(filename = "hostsex75cov.jpeg", width = 9, height = 4,
+#        units = "in")
 
 # Effect of capture no.
 c1 <- model$BUGSoutput$sims.list$c1
@@ -581,7 +637,13 @@ ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
+  labs(x = "Ectoparasite Species", y = "Capture no. Coefficient")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
+        panel.grid = element_blank())
+
+# ggsave(filename = "capno75cov.jpeg", width = 9, height = 4,
+#        units = "in")
 
 # Julian date
 c2 <- model$BUGSoutput$sims.list$c2
@@ -595,4 +657,10 @@ ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1))
+  labs(x = "Ectoparasite Species", y = "Julian Date Coefficient")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
+        panel.grid = element_blank())
+
+# ggsave(filename = "datecov.jpeg", width = 9, height = 4,
+#        units = "in")
