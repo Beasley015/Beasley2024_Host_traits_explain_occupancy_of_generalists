@@ -347,7 +347,6 @@ dateslist <- cap.convert(dates.frame, 2:10, 1)
 dates <- do.call("rbind", dateslist)
 dates <- dates[,c(-1, -10)]
   
-
 # Write model -------------------------
 cat("
     model{
@@ -419,9 +418,9 @@ cat("
         # Calculate deviance residuals
         Z.resid[j,i] <- ifelse((sitemax[j,i]-psi[j,i])==0, 0, 1)*
                         ifelse((sitemax[j,i]-psi[j,i])<0, -1, 1)*
-                        ifelse(sitemax[j,i]==1,
+                        ifelse(sitemax[j,i]==1, #error in ifelse
                                sqrt(-2*log(psi[j,i])),
-                               sqrt(-2*log(1-psi[j,i])))
+                               (-sqrt(-2*log(1-psi[j,i]))))
 
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
@@ -476,8 +475,8 @@ datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
                  julian = dates, sitemax = sitemax)
 
-params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1', 'c2',
-            'Z.resid')
+params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1',
+            'c2', 'Z.resid')
 
 # Init values
 inits <- function(){
@@ -488,7 +487,8 @@ inits <- function(){
 }
 
 # Send model to JAGS
-model <- jags(model.file = 'ectomod.txt', data = datalist, n.chains = 3,
+model <- jags(model.file = 'ectomod.txt', data = datalist,
+              n.chains = 3,
               parameters.to.save = params, inits = inits, 
               n.burnin = 1000, n.iter = 5000, n.thin = 10)
 #Full burnin 8000, full iter 15000
