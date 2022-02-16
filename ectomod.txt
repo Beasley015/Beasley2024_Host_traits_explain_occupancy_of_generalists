@@ -68,9 +68,9 @@
         # Calculate deviance residuals
         Z.resid[j,i] <- ifelse((sitemax[j,i]-psi[j,i])==0, 0, 1)*
                         ifelse((sitemax[j,i]-psi[j,i])<0, -1, 1)*
-                        ifelse((sitemax[j,i])==1, #error in ifelse
-                               sqrt(-2*log(psi[j,i])),
-                               (-sqrt(-2*log(1-psi[j,i]))))
+                        ifelse(sitemax[j,i]==1, 
+                               sqrt(-2*log(psi[j,i])), 
+                               -sqrt(-2*log(1-psi[j,i])))
 
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
