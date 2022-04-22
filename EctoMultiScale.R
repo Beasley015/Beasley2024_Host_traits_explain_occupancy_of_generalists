@@ -12,6 +12,7 @@ library(tidyverse)
 library(viridis)
 library(abind)
 library(R2jags)
+library(multiApply)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -94,11 +95,20 @@ length(unique(ecto.clean$Family))
 nrow(unique(ecto.clean[c("Order", "Genus", "Species")]))
 
 # Abundance per order
-mamm.ecto %>%
+ecto.abund <- mamm.ecto %>%
   filter(is.na(Order) == F & Order != "") %>%
   group_by(Order) %>%
   summarise(Count = n()) 
 # So many fleas
+
+ggplot(data = ecto.abund, aes(x = Order, y = Count))+
+  geom_col()+
+  labs(y = "Abundance")+
+  theme_bw(base_size = 18)+
+  theme(panel.grid = element_blank())
+
+ggsave(filename = "ectoabund.jpg", width = 6.5, height = 4.5, 
+       units = "in")
 
 # table <- mamm.ecto %>%
 #   filter(is.na(Order) == F & Order != "") %>%
@@ -163,11 +173,11 @@ ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
 # Hosts per ecto species
 n.host <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
-  select(Abbrev, Order, Genus, Species) %>%
+  select(Abbrev, Order, Family, Genus, Species) %>%
   distinct() %>% 
   filter(Order != "" & is.na(Order)==F) %>%
   unite(ecto, Genus, Species) %>%
-  group_by(Order, ecto) %>%
+  group_by(Order, Family, ecto) %>%
   summarise(hosts = n())
 
 ggplot(data = n.host, aes(x = hosts, fill = Order))+
@@ -188,8 +198,12 @@ mecto.clean <- mamm.ecto %>%
 
 # Select columns and add occupancy column
 mecto.smol <- mecto.clean %>%
-  select(Tag, Site, Day, Genus, Species) %>%
+  select(Tag, Site, Day, Genus, Species, Other) %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~ 
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
+  select(-Other) %>%
   mutate(Ecto = case_when(Ecto == "_" ~ NA_character_,
                           Ecto == "" ~ NA_character_,
                           TRUE ~ Ecto)) %>%
@@ -414,13 +428,6 @@ cat("
       
         logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*height[j]
         Z[j,i] ~ dbern(psi[j,i])
-        
-        # Calculate deviance residuals
-        Z.resid[j,i] <- ifelse((sitemax[j,i]-psi[j,i])==0, 0, 1)*
-                        ifelse((sitemax[j,i]-psi[j,i])<0, -1, 1)*
-                        ifelse(sitemax[j,i]==1, 
-                               sqrt(-2*log(psi[j,i])), 
-                              # -sqrt(-2*log(1-psi[j,i]))) #PROBLEM
 
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
@@ -471,12 +478,13 @@ hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
                  host = hostspec, K = length(unique(hostspec)), 
-                 mass = hostmass, cover = comp.cov, height = height.cov,
+                 mass = hostmass, cover = comp.cov, 
+                 height = height.cov,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
-                 julian = dates, sitemax = sitemax)
+                 julian = dates)
 
-params <- c('a0', 'a1', 'a2', 'b0', 'b1', 'b2', 'b3', 'c0', 'c1',
-            'c2', 'Z.resid')
+params <- c('a1', 'a2', 'b1', 'b2', 'b3', 'c1', 'c2', 'psi',
+            'theta', 'Z', 'Y')
 
 # Init values
 inits <- function(){
@@ -487,11 +495,10 @@ inits <- function(){
 }
 
 # Send model to JAGS
-model <- jags(model.file = 'ectomod.txt', data = datalist,
-              n.chains = 3,
-              parameters.to.save = params, inits = inits, 
-              n.burnin = 1000, n.iter = 5000, n.thin = 10)
-#Full burnin 8000, full iter 15000
+# model <- jags(model.file = 'ectomod.txt', data = datalist,
+#               n.chains = 3,
+#               parameters.to.save = params, inits = inits,
+#               n.burnin = 8000, n.iter = 15000, n.thin = 10)
 
 # Save model
 # saveRDS(model, file = "ectomod.rds")
@@ -504,8 +511,8 @@ model <- readRDS("ectomod.rds")
 a1 <- model$BUGSoutput$sims.list$a1 # Might need to revisit this cov
 
 a1s <- data.frame(mean = apply(a1, 2, mean),
-           lo = apply(a1, 2, quantile, 0.125),
-           hi = apply(a1, 2, quantile, 0.875))
+           lo = apply(a1, 2, quantile, 0.025),
+           hi = apply(a1, 2, quantile, 0.975))
 rownames(a1s) <- colnames(site.occ)[-1]
 
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
@@ -517,7 +524,7 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
         panel.grid = element_blank())
 
-# ggsave(filename = "vegcomp75cov.jpeg", width = 9, height = 4, 
+# ggsave(filename = "vegcomp95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Veg structure
@@ -543,14 +550,14 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
 
-b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.125))
+b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.025))
 colnames(b1lo) <- levels(hostspec)
 b1lo$Ecto <- sort(unique(mecto.caps$Ecto))
 
 b1lo <- pivot_longer(b1lo, cols = -Ecto, 
                      names_to = "host", values_to = "lo")
 
-b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.875))
+b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.975))
 colnames(b1hi) <- levels(hostspec)
 b1hi$Ecto <- sort(unique(mecto.caps$Ecto))
 
@@ -588,8 +595,8 @@ for(i in 1:length(ecto.specs)){
 }
 
 # for(i in 1:length(plotlist)){
-#   ggsave(plotlist[[i]], filename = paste("95cihost", i, ".jpeg", 
-#                                          sep = ""), 
+#   ggsave(plotlist[[i]], filename = paste("95cihost", i, ".jpeg",
+#                                          sep = ""),
 #          width = 5, height = 3, units = "in")
 # }
 
@@ -617,8 +624,8 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
 b3 <- model$BUGSoutput$sims.list$b3
 
 b3s <- data.frame(mean = apply(b3, 2, mean),
-           lo = apply(b3, 2, quantile, 0.125),
-           hi = apply(b3, 2, quantile, 0.875))
+           lo = apply(b3, 2, quantile, 0.025),
+           hi = apply(b3, 2, quantile, 0.975))
 rownames(b3s) <- colnames(site.occ)[-1]
 
 ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
@@ -630,7 +637,7 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
         panel.grid = element_blank())
 
-# ggsave(filename = "hostsex75cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "hostsex95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Effect of capture no.
@@ -657,8 +664,8 @@ ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
 c2 <- model$BUGSoutput$sims.list$c2
 
 c2s <- data.frame(mean = apply(c2, 2, mean), 
-           lo = apply(c2, 2, quantile, 0.025), 
-           hi = apply(c2, 2, quantile, 0.975))
+           lo = apply(c2, 2, quantile, 0.125), 
+           hi = apply(c2, 2, quantile, 0.875))
 rownames(c2s) <- colnames(site.occ)[-1]
 
 ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
@@ -670,5 +677,138 @@ ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
         panel.grid = element_blank())
 
-# ggsave(filename = "datecov.jpeg", width = 9, height = 4,
+# ggsave(filename = "datecov75.jpeg", width = 9, height = 4,
 #        units = "in")
+
+# Bayesian r-squared ---------------------
+# Calculation for model variance
+var.yhat <- function(y,n=necto){
+  yvar <- matrix(NA, ncol = n)
+  for(i in 1:necto){
+    yvar[,i] <- var(y[,i])
+  }
+  return(yvar)
+}
+
+var.res <- function(x,n=necto){
+  resvar <- matrix(NA, ncol = n)
+  for(i in 1:necto){
+    resvar[,i] <- (1/necto)*sum(x[,i]*(1-x[,i]))
+  }
+  return(resvar)
+}
+
+# Calculation for Bayesian r-squared
+bayes.r2 <- function(x,y){
+  r2 <- y/(y+x)
+  return(r2)
+}
+
+# Site-level
+psi <- model$BUGSoutput$sims.list$psi
+
+site.yhat <- apply(psi, 1, var.yhat)
+site.res <- apply(psi, 1, var.res)
+site.r2 <- Apply(data = list(site.res, site.yhat), margins = 2, 
+                 fun = bayes.r2)[[1]]
+
+# Host-level
+theta <- model$BUGSoutput$sims.list$theta
+
+host.yhat <- apply(theta, 1, var.yhat)
+host.res <- apply(theta, 1, var.res)
+host.r2 <- Apply(data = list(host.res, host.yhat), margins = 2, 
+                 fun = bayes.r2)[[1]]
+
+# R2 Figures ------------------------
+# Vector of species names
+ecto.specs <- names(ecto.list2)
+
+# Site-level r-squared
+mean.site.r2 <- apply(site.r2, 1, mean)
+median.site.r2 <- apply(site.r2, 1, median)
+site.df <- data.frame(Ecto = ecto.specs, site.r2 = mean.site.r2,
+                      median.r2 = median.site.r2)
+
+# Get family and order names for each species
+site.df <- site.df %>%
+  left_join(n.host, by = c("Ecto" = "ecto"))
+
+# Flea classifications
+fleaclass <- read.csv("FleaClassifications.csv") %>%
+  unite(col = "Ecto", Genus, Species, sep = "_") %>%
+  select(Ecto, Classification)
+
+# Merge with site df
+site.df <- site.df %>%
+  left_join(fleaclass, by = "Ecto") %>%
+  mutate(Order = case_when(startsWith(Ecto, "Ixodes") ~ "Ixodida",
+                           TRUE ~ Order)) %>%
+  mutate(Classification = case_when(Order == "Ixodida"  ~ "Ephemeral",
+                                    Order == "Mesostigmata" 
+                                    ~ "Mesostigmata",
+                                    Order == "Diptera" ~ "Diptera",
+                                    TRUE ~ Classification))
+
+# Make some quick plots
+qplot(data = site.df, x = Classification, y = site.r2, geom = "boxplot")
+qplot(data = site.df, x = Classification, y = median.r2, 
+      geom = "boxplot")
+# patterns are pretty close regardless of mean/median
+
+site.aov <- summary(aov(data = site.df, 
+                        formula = site.r2~Classification))
+site.sansout <- summary(aov(data = site.df[site.df$Ecto != "Orchopeas_leucopus",], 
+                           formula = site.r2~Classification))
+site.aov[[1]]$`Sum Sq`[1]/(sum(site.aov[[1]]$`Sum Sq`))
+site.sansout[[1]]$`Sum Sq`[1]/(sum(site.sansout[[1]]$`Sum Sq`))
+
+# Host-level r-squared
+mean.host.r2 <- apply(host.r2, 1, mean)
+host.df <- data.frame(Ecto = ecto.specs, host.r2 = mean.host.r2)
+
+host.df <- host.df %>%
+  left_join(n.host, by = c("Ecto" = "ecto"))
+
+# Merge with fleas
+host.df <- host.df %>%
+  left_join(fleaclass, by = "Ecto") %>%
+  mutate(Order = case_when(startsWith(Ecto, "Ixodes") ~ "Ixodida",
+                           TRUE ~ Order)) %>%
+  mutate(Classification = case_when(Order == "Ixodida"  ~ "Ephemeral",
+                                    Order == "Mesostigmata" ~ 
+                                      "Mesostigmata",
+                                    Order == "Diptera" ~ "Diptera",
+                                    TRUE ~ Classification))
+
+qplot(data = host.df, x = Classification, y = host.r2,
+      geom = "boxplot")
+
+kruskal.test(formula = host.r2~Classification, data = host.df)
+
+host.aov <- summary(aov(formula = host.r2~Classification, 
+                        data = host.df))
+host.aov
+
+# R-squared vs. host specificity -------------------
+summary(lm(data = site.df, formula = hosts~site.r2))
+summary(lm(data = host.df, formula = hosts~host.r2))
+# This is wild
+
+ggplot(data = site.df, aes(x = site.r2, y = hosts))+
+  geom_point()+
+  geom_smooth(se = F, method = 'lm', color = "black")+
+  labs(x = bquote("Site"~R^2), y = "Number of Hosts")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("siter2hosts.jpeg", height =3, width = 5, units = "in")
+
+ggplot(data = host.df, aes(x = host.r2, y = hosts))+
+  geom_point()+
+  geom_smooth(se = F, method = 'lm', color = "black")+
+  labs(x = bquote("Host"~R^2), y = "Number of Hosts")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("hostr2hosts.jpeg", height = 3, width = 5, units = "in")

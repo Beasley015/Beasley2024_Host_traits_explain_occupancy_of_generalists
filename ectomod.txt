@@ -64,13 +64,6 @@
       
         logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*height[j]
         Z[j,i] ~ dbern(psi[j,i])
-        
-        # Calculate deviance residuals
-        Z.resid[j,i] <- ifelse((sitemax[j,i]-psi[j,i])==0, 0, 1)*
-                        ifelse((sitemax[j,i]-psi[j,i])<0, -1, 1)*
-                        ifelse(sitemax[j,i]==1, 
-                               sqrt(-2*log(psi[j,i])), 
-                               -sqrt(-2*log(1-psi[j,i])))
 
         # Occupancy model: Host
         for(k in tagmat[1:hostvec[j],j]){
