@@ -1,12 +1,12 @@
 Order,Genus,Species,Count,Classification,Citation
-Siphonaptera,Ctenophthalmus ,pseudagyrtes,11,nest,Benton & Kelly 1969
-Siphonaptera,Doratopsylla,blarinae,1,fur,Traub 1972
-Siphonaptera,Epitedia,wenmanni,2,nest,Traub 1972
-Siphonaptera,Megabothris,acerbus,8,fur,Amin & Sewell 1977
-Siphonaptera,Megabothris,asio,6,nest,Quackenbush 1971
-Siphonaptera,Megabothris,quirini,53,nest,Benton & Cerwonka 1960*
-Siphonaptera,Monopsyllus,vison,1,fur,Haas et al. 1973
-Siphonaptera,Orchopeas,howardii,1,fur,Traub 1972; Amin & Sewell 1977
-Siphonaptera,Orchopeas,leucopus,193,fur,Haas et al. 1973 (fur); Jackson & Defoliart 1976 (nest)
-Siphonaptera,Peromyscopsylla,hesperomys,4,fur,Traub 1972
-Siphonaptera,Peromyscopsylla,scotti,1,fur,Traub 1972
+Siphonaptera,Ctenophthalmus,pseudagyrtes,11,Nest,Benton & Kelly 1969
+Siphonaptera,Doratopsylla,blarinae,1,Fur,Traub 1972
+Siphonaptera,Epitedia,wenmanni,2,Nest,Traub 1972
+Siphonaptera,Megabothris,acerbus,8,Fur,Amin & Sewell 1977
+Siphonaptera,Megabothris,asio,6,Nest,Quackenbush 1971
+Siphonaptera,Megabothris,quirini,53,Nest,Benton & Cerwonka 1960*; Traub 1972 (morphological characteristics)
+Siphonaptera,Monopsyllus,vison,1,Fur,Haas et al. 1973
+Siphonaptera,Orchopeas,howardii,1,Fur,Traub 1972; Amin & Sewell 1977
+Siphonaptera,Orchopeas,leucopus,193,Nest,Haas et al. 1973 (fur); Jackson & Defoliart 1976 (nest); Traub 1972 (based on morphological characteristics)
+Siphonaptera,Peromyscopsylla,hesperomys,4,Fur,Traub 1972
+Siphonaptera,Peromyscopsylla,scotti,1,Fur,Traub 1972

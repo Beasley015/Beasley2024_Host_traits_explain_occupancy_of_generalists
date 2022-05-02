@@ -180,6 +180,15 @@ n.host <- mamm.ecto %>%
   group_by(Order, Family, ecto) %>%
   summarise(hosts = n())
 
+# ixodes split by life stage
+mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  select(Abbrev, Genus, Species, Other) %>%
+  filter(Genus == "Ixodes") %>%
+  distinct() %>% 
+  group_by(Genus, Species, Other) %>%
+  summarise(hosts = n())
+
 ggplot(data = n.host, aes(x = hosts, fill = Order))+
   geom_bar(color = "black")+
   scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
@@ -746,9 +755,13 @@ site.df <- site.df %>%
                            TRUE ~ Order)) %>%
   mutate(Classification = case_when(Order == "Ixodida"  ~ "Ephemeral",
                                     Order == "Mesostigmata" 
-                                    ~ "Mesostigmata",
+                                    ~ "Nest",
                                     Order == "Diptera" ~ "Diptera",
-                                    TRUE ~ Classification))
+                                    TRUE ~ Classification)) %>%
+  mutate(hosts = as.numeric(hosts)) %>%
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 3,
+                           Ecto == "Ixodes_scapularis_nymph" ~ 5,
+                           TRUE ~ hosts))
 
 # Make some quick plots
 qplot(data = site.df, x = Classification, y = site.r2, geom = "boxplot")
@@ -756,12 +769,22 @@ qplot(data = site.df, x = Classification, y = median.r2,
       geom = "boxplot")
 # patterns are pretty close regardless of mean/median
 
+# Stat test
 site.aov <- summary(aov(data = site.df, 
                         formula = site.r2~Classification))
-site.sansout <- summary(aov(data = site.df[site.df$Ecto != "Orchopeas_leucopus",], 
-                           formula = site.r2~Classification))
+
+# Eta-sq (effect size)
 site.aov[[1]]$`Sum Sq`[1]/(sum(site.aov[[1]]$`Sum Sq`))
-site.sansout[[1]]$`Sum Sq`[1]/(sum(site.sansout[[1]]$`Sum Sq`))
+
+# full fig
+ggplot(data = site.df, aes(x = Classification, y = site.r2))+
+  geom_boxplot(fill = "lightgray")+
+  labs(y = bquote("Site"~R^2))+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave(filename = "siter2.jpeg", height = 4, width = 4, units = "in",
+#        dpi = 600)
 
 # Host-level r-squared
 mean.host.r2 <- apply(host.r2, 1, mean)
@@ -777,18 +800,33 @@ host.df <- host.df %>%
                            TRUE ~ Order)) %>%
   mutate(Classification = case_when(Order == "Ixodida"  ~ "Ephemeral",
                                     Order == "Mesostigmata" ~ 
-                                      "Mesostigmata",
+                                      "Nest",
                                     Order == "Diptera" ~ "Diptera",
-                                    TRUE ~ Classification))
+                                    TRUE ~ Classification)) %>%
+  mutate(hosts = as.numeric(hosts)) %>%
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 3,
+                           Ecto == "Ixodes_scapularis_nymph" ~ 5,
+                           TRUE ~ hosts))
 
 qplot(data = host.df, x = Classification, y = host.r2,
       geom = "boxplot")
 
-kruskal.test(formula = host.r2~Classification, data = host.df)
-
+# ANOVA
 host.aov <- summary(aov(formula = host.r2~Classification, 
                         data = host.df))
-host.aov
+host.aov[[1]]$`Sum Sq`[1]/(sum(host.aov[[1]]$`Sum Sq`))
+# eta2 is quite high actually- nonsig could be due 
+# to high variability in nest guys
+
+# Final fig
+ggplot(data = host.df, aes(x = Classification, y = host.r2))+
+  geom_boxplot(fill = 'lightgray')+
+  labs(y = bquote("Host"~R^2))+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave(filename = "hostr2.jpeg", height = 4, width = 4, units = 'in',
+#        dpi = 600)
 
 # R-squared vs. host specificity -------------------
 summary(lm(data = site.df, formula = hosts~site.r2))
@@ -812,3 +850,74 @@ ggplot(data = host.df, aes(x = host.r2, y = hosts))+
   theme(panel.grid = element_blank())
 
 # ggsave("hostr2hosts.jpeg", height = 3, width = 5, units = "in")
+
+# Covariate sig figs ------------------------
+# Site covs
+sitecov <- read.csv("CovFigsSite.csv") %>%
+  pivot_longer(cols = -Cov, names_to = "Ecto", values_to = "Sig") 
+
+sitecov$Sig[sitecov$Sig == ""] <- NA
+
+site.cov <- site.df %>%
+  select(Ecto, Classification) %>%
+  full_join(sitecov, by = "Ecto") %>%
+  arrange(Classification) %>%
+  mutate(Ecto = factor(Ecto, levels = unique(.$Ecto)))
+
+ggplot(data = site.cov, aes(x = Cov, y = Ecto, fill = Sig))+
+  geom_raster()+
+  labs(x = "Site Covariate")+
+  scale_fill_manual(na.value = "white", 
+                    values = c("red3","dodgerblue2"))+
+  theme_bw()+
+  theme(axis.title.y = element_blank(), panel.grid = element_blank())
+
+# ggsave(filename = "sitecovfig.jpeg", height = 6, width = 4.5,
+#        units = "in")
+
+# Host covs
+hostcov <- read.csv("CovFigsHost.csv") %>%
+  pivot_longer(cols = -Cov, names_to = "Ecto", values_to = "Sig") 
+
+hostcov$Sig[hostcov$Sig == ""] <- NA
+
+host.cov <- site.df %>%
+  select(Ecto, Classification) %>%
+  full_join(hostcov, by = "Ecto") %>%
+  arrange(Classification) %>%
+  mutate(Ecto = factor(Ecto, levels = unique(.$Ecto))) %>%
+  mutate(Cov = factor(Cov, levels = unique(hostcov$Cov))) 
+
+ggplot(data = host.cov, aes(x = Cov, y = Ecto, fill = Sig))+
+  geom_raster()+
+  labs(x = "Host Covariate")+
+  scale_fill_manual(na.value = "white", 
+                    values = c("red3","dodgerblue2"))+
+  theme_bw()+
+  theme(axis.title.y = element_blank(), panel.grid = element_blank())
+
+# ggsave(filename = "hostcovfig.jpeg", height = 6, width = 7,
+#        units = "in")
+
+# Detection covs
+detcov <- read.csv("CovFigsDet.csv") %>%
+  pivot_longer(cols = -Cov, names_to = "Ecto", values_to = "Sig") 
+
+detcov$Sig[detcov$Sig == ""] <- NA
+
+det.cov <- site.df %>%
+  select(Ecto, Classification) %>%
+  full_join(detcov, by = "Ecto") %>%
+  arrange(Classification) %>%
+  mutate(Ecto = factor(Ecto, levels = unique(.$Ecto)))  
+
+ggplot(data = det.cov, aes(x = Cov, y = Ecto, fill = Sig))+
+  geom_raster()+
+  labs(x = "Detection Covariate")+
+  scale_fill_manual(na.value = "white", 
+                    values = c("red3","dodgerblue2"))+
+  theme_bw()+
+  theme(axis.title.y = element_blank(), panel.grid = element_blank())
+
+# ggsave(filename = "detcovfig.jpeg", height = 6, width = 4,
+#        units = "in")

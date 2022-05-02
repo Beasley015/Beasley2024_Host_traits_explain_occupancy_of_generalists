@@ -144,10 +144,10 @@ E260,Mesostigmata,Laelapidae,Hyperlaelaps,,M
 E267,Mesostigmata,Laelapidae,Androlaelaps,,M
 E273,Mesostigmata,Laelapidae,,,
 E308,Mesostigmata,Laelapidae,Hyperlaelaps,,M
-E002,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
-E002,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E002,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
+E002,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E002,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
-E003,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,M
+E003,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,M
 E004,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E004,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E005,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
@@ -163,7 +163,7 @@ E019,Siphonaptera,Leptopsyllidae,Peromyscopsylla,hesperomys,F
 E021,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
 E021,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
 E023,Siphonaptera,Ceratophyllidae,Megabothris,asio,F
-E026,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E026,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E027,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E027,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E029,Siphonaptera,Leptopsyllidae,Peromyscopsylla,hesperomys,M
@@ -226,7 +226,7 @@ E083,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
 E086,Siphonaptera,Ceratophyllidae,Megabothris,quirini,M
 E087,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E087,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
-E088,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E088,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E089,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E089,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E090,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
@@ -243,7 +243,7 @@ E095,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E095,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E095,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E095,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
-E096,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,M
+E096,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,M
 E096,Siphonaptera,Ceratophyllidae,Megabothris,acerbus,F
 E096,Siphonaptera,Ceratophyllidae,Megabothris,acerbus,F
 E097,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
@@ -257,7 +257,7 @@ E104,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E105,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E105,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E107,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
-E108,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E108,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E109,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E110,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E111,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
@@ -321,15 +321,15 @@ E183,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E183,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E184,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E184,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
-E185,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,M
-E186,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E185,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,M
+E186,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E187,Siphonaptera,Ceratophyllidae,Megabothris,asio,M
-E188,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E188,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E188,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
-E189,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E189,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E189,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E189,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
-E190,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,M
+E190,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,M
 E190,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E190,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E191,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
@@ -360,10 +360,10 @@ E210,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E210,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E211,Siphonaptera,Ceratophyllidae,Monopsyllus,vison,F
 E214,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
-E217,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,F
+E217,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,F
 E218,Siphonaptera,Ceratophyllidae,Megabothris,asio,F
 E218,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
-E219,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,M
+E219,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,M
 E220,Siphonaptera,Ceratophyllidae,Megabothris,asio,F
 E221,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E224,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
@@ -442,7 +442,7 @@ E298,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E300,Siphonaptera,Ceratophyllidae,Megabothris,quirini,F
 E303,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E306,Siphonaptera,Ceratophyllidae,Megabothris,asio,F
-E307,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus ,pseudagyrtes,M
+E307,Siphonaptera,Hystrichopsyllidae,Ctenophthalmus,pseudagyrtes,M
 E309,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,M
 E310,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
 E310,Siphonaptera,Ceratophyllidae,Orchopeas,leucopus,F
