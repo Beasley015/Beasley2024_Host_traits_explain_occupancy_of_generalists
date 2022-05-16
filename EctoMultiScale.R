@@ -59,7 +59,7 @@ mamm.ecto <- mamm.2020 %>%
   mutate(Day = case_when(trap.sesh == "2" ~ as.character(Day+3),
                          trap.sesh == "3" ~ as.character(Day+6),
                          TRUE ~ as.character(Day))) %>%
-  mutate(Day = as.numeric(Day))
+  mutate(Day = as.numeric(Day)) %>%
 
 # Mammal summary stats and early tables/figures ------------------
 # Number of mammal species
@@ -107,8 +107,8 @@ ggplot(data = ecto.abund, aes(x = Order, y = Count))+
   theme_bw(base_size = 18)+
   theme(panel.grid = element_blank())
 
-ggsave(filename = "ectoabund.jpg", width = 6.5, height = 4.5, 
-       units = "in")
+# ggsave(filename = "ectoabund.jpg", width = 6.5, height = 4.5, 
+#        units = "in")
 
 # table <- mamm.ecto %>%
 #   filter(is.na(Order) == F & Order != "") %>%
@@ -173,20 +173,15 @@ ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
 # Hosts per ecto species
 n.host <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
+  mutate(Species = case_when(Genus == "Ixodes" & 
+                               Species == "scapularis" ~
+                               paste(Species, Other, sep = "_"),
+                             TRUE ~ Species)) %>%
   select(Abbrev, Order, Family, Genus, Species) %>%
   distinct() %>% 
   filter(Order != "" & is.na(Order)==F) %>%
   unite(ecto, Genus, Species) %>%
   group_by(Order, Family, ecto) %>%
-  summarise(hosts = n())
-
-# ixodes split by life stage
-mamm.ecto %>%
-  filter(SampleNo. != "") %>%
-  select(Abbrev, Genus, Species, Other) %>%
-  filter(Genus == "Ixodes") %>%
-  distinct() %>% 
-  group_by(Genus, Species, Other) %>%
   summarise(hosts = n())
 
 ggplot(data = n.host, aes(x = hosts, fill = Order))+
@@ -198,6 +193,71 @@ ggplot(data = n.host, aes(x = hosts, fill = Order))+
   theme(panel.grid = element_blank())
 
 # ggsave("NumOfHosts.jpeg")
+
+# by host subfamily:
+n.host.sub <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  mutate(Species = case_when(Genus == "Ixodes" & 
+                               Species == "scapularis" ~
+                               paste(Species, Other, sep = "_"),
+                             TRUE ~ Species)) %>%
+  select(Abbrev, Order, Family, Genus, Species) %>%
+  mutate(HostSub = case_when(Abbrev %in% c("ZAHU", "NAIN")
+                             ~ "Zapodinae",
+                             Abbrev %in% c("PELE", "PEMA")
+                             ~ "Neotominae",
+                             Abbrev %in% c("MIPE", "MYGA")
+                             ~ "Arvicolinae",
+                             Abbrev == "TAST" ~ "Xerinae",
+                             Abbrev == "BLBR" ~ "Soricinae")) %>%
+  select(-Abbrev) %>%
+  distinct() %>%
+  filter(Order != "" & is.na(Order)==F) %>%
+  unite(ecto, Genus, Species) %>%
+  group_by(Order, Family, ecto) %>%
+  summarise(hosts = n())
+
+ggplot(data = n.host.sub, aes(x = hosts, fill = Order))+
+  geom_bar(color = "black")+
+  scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
+                                         start = 0.05))+
+  labs(x = "Number of Hosts", y = "Number of Parasite Species")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("hostsubfam.jpeg")
+
+# by host family:
+n.host.fam <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  mutate(Species = case_when(Genus == "Ixodes" & 
+                               Species == "scapularis" ~
+                               paste(Species, Other, sep = "_"),
+                             TRUE ~ Species)) %>%
+  select(Abbrev, Order, Family, Genus, Species) %>%
+  mutate(HostSub = case_when(Abbrev %in% c("ZAHU", "NAIN")
+                             ~ "Dipodidae",
+                             Abbrev %in% c("PELE", "PEMA", 
+                                           "MIPE", "MYGA")
+                             ~ "Cricetidae",
+                             Abbrev == "TAST" ~ "Sciuridae",
+                             Abbrev == "BLBR" ~ "Soricidae")) %>%
+  select(-Abbrev) %>%
+  distinct() %>%
+  filter(Order != "" & is.na(Order)==F) %>%
+  unite(ecto, Genus, Species) %>%
+  group_by(Order, Family, ecto) %>%
+  summarise(hosts = n())
+
+ggplot(data = n.host.fam, aes(x = hosts, fill = Order))+
+  geom_bar(color = "black")+
+  scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
+                                         start = 0.05))+
+  labs(x = "Number of Hosts", y = "Number of Parasite Species")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave("nhostfam.jpeg")
 
 # Prepping data for MSOM ----------------------
 # Clean data
@@ -743,6 +803,14 @@ site.df <- data.frame(Ecto = ecto.specs, site.r2 = mean.site.r2,
 site.df <- site.df %>%
   left_join(n.host, by = c("Ecto" = "ecto"))
 
+# If counting host by subfamily:
+# site.df <- site.df %>%
+#   left_join(n.host.sub, by = c("Ecto" = "ecto"))
+
+# If counting host by family:
+# site.df <- site.df %>%
+#   left_join(n.host.fam, by = c("Ecto" = "ecto"))
+
 # Flea classifications
 fleaclass <- read.csv("FleaClassifications.csv") %>%
   unite(col = "Ecto", Genus, Species, sep = "_") %>%
@@ -790,8 +858,17 @@ ggplot(data = site.df, aes(x = Classification, y = site.r2))+
 mean.host.r2 <- apply(host.r2, 1, mean)
 host.df <- data.frame(Ecto = ecto.specs, host.r2 = mean.host.r2)
 
+# Host species:
 host.df <- host.df %>%
   left_join(n.host, by = c("Ecto" = "ecto"))
+
+# Host subfamilies:
+# host.df <- host.df %>%
+#   left_join(n.host.sub, by = c("Ecto" = "ecto"))
+
+# Host families:
+# host.df <- host.df %>%
+#   left_join(n.host.fam, by = c("Ecto" = "ecto"))
 
 # Merge with fleas
 host.df <- host.df %>%
@@ -835,21 +912,25 @@ summary(lm(data = host.df, formula = hosts~host.r2))
 
 ggplot(data = site.df, aes(x = site.r2, y = hosts))+
   geom_point()+
-  geom_smooth(se = F, method = 'lm', color = "black")+
+  # geom_smooth(se = F, method = 'lm', color = "black")+
   labs(x = bquote("Site"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
 # ggsave("siter2hosts.jpeg", height =3, width = 5, units = "in")
+# ggsave("siter2hostsub.jpeg", height =3, width = 5, units = "in")
+# ggsave("siter2hostfam.jpeg", height =3, width = 5, units = "in")
 
 ggplot(data = host.df, aes(x = host.r2, y = hosts))+
   geom_point()+
-  geom_smooth(se = F, method = 'lm', color = "black")+
+  # geom_smooth(se = F, method = 'lm', color = "black")+
   labs(x = bquote("Host"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
 # ggsave("hostr2hosts.jpeg", height = 3, width = 5, units = "in")
+# ggsave("hostr2hostsub.jpeg", height = 3, width = 5, units = "in")
+# ggsave("hostr2hostfam.jpeg", height = 3, width = 5, units = "in")
 
 # Covariate sig figs ------------------------
 # Site covs
