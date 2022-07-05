@@ -48,7 +48,7 @@ veg.2020 <- veg.raw %>%
   mutate(Date = as.Date(Date, format = "%d/%m/%Y")) %>%
   filter(Date > as.Date("2020-01-01"))
 
-# Merge datasets and adjust day by sampling period --------------------
+# Merge datasets and adjust day by sampling period ----------------
 breaks <- c(as.Date("2020-05-25"), as.Date("2020-06-17"),
             as.Date("2020-07-12"), as.Date("2020-08-08"))
 
@@ -60,6 +60,10 @@ mamm.ecto <- mamm.2020 %>%
                          trap.sesh == "3" ~ as.character(Day+6),
                          TRUE ~ as.character(Day))) %>%
   mutate(Day = as.numeric(Day)) %>%
+  mutate(Genus = case_when(Order == "Psocodea" ~ "Unknown Psocodea",
+                           Order == "Mesostigmata" & Genus == "" ~
+                             "Unknown Mesostigmata",
+                           TRUE ~ Genus))
 
 # Mammal summary stats and early tables/figures ------------------
 # Number of mammal species
@@ -107,7 +111,7 @@ ggplot(data = ecto.abund, aes(x = Order, y = Count))+
   theme_bw(base_size = 18)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "ectoabund.jpg", width = 6.5, height = 4.5, 
+# ggsave(filename = "ectoabund.jpg", width = 7, height = 4.5,
 #        units = "in")
 
 # table <- mamm.ecto %>%
@@ -162,7 +166,8 @@ mamm.raster <- mamm.ecto %>%
 ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
   geom_raster(aes(fill = Order))+
   scale_fill_viridis_d(limits = c("Siphonaptera", "Ixodida",
-                                  "Mesostigmata", "Diptera"))+
+                                  "Mesostigmata", "Diptera",
+                                  "Psocodea"))+
   labs(x = "Host Species", y = "Parasite Species")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
@@ -186,7 +191,7 @@ n.host <- mamm.ecto %>%
 
 ggplot(data = n.host, aes(x = hosts, fill = Order))+
   geom_bar(color = "black")+
-  scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
+  scale_fill_manual(values = gray.colors(n = 5, end = 0.85,
                                          start = 0.05))+
   labs(x = "Number of Hosts", y = "Number of Parasite Species")+
   theme_bw(base_size = 14)+
@@ -219,7 +224,7 @@ n.host.sub <- mamm.ecto %>%
 
 ggplot(data = n.host.sub, aes(x = hosts, fill = Order))+
   geom_bar(color = "black")+
-  scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
+  scale_fill_manual(values = gray.colors(n = 5, end = 0.85,
                                          start = 0.05))+
   labs(x = "Number of Hosts", y = "Number of Parasite Species")+
   theme_bw(base_size = 14)+
@@ -251,13 +256,35 @@ n.host.fam <- mamm.ecto %>%
 
 ggplot(data = n.host.fam, aes(x = hosts, fill = Order))+
   geom_bar(color = "black")+
-  scale_fill_manual(values = gray.colors(n = 4, end = 0.85,
+  scale_fill_manual(values = gray.colors(n = 5, end = 0.85,
                                          start = 0.05))+
   labs(x = "Number of Hosts", y = "Number of Parasite Species")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
 # ggsave("nhostfam.jpeg")
+
+# Test host richness/parasite richness relationship
+rich <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  select(Site, Abbrev, Order, Family, Genus, Species) %>%
+  group_by(Abbrev) %>%
+  distinct() %>% 
+  filter(Order != "" & is.na(Order)==F) %>%
+  unite(ecto, Genus, Species) %>%
+  mutate(Occ = 1) %>%
+  group_by(Site) %>%
+  summarise(Mamm.rich = length(unique(Abbrev)), 
+            ecto.rich = length(unique(ecto)))
+
+summary(lm(data = rich, ecto.rich~Mamm.rich))
+
+ggplot(data = rich, aes(x = Mamm.rich, y = ecto.rich))+
+  geom_point()+
+  geom_smooth(method = 'lm', se = F, color = "black")+
+  labs(x = "Host Richness", y = "Ectoparasite Richness")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
 
 # Prepping data for MSOM ----------------------
 # Clean data
@@ -577,23 +604,29 @@ model <- readRDS("ectomod.rds")
 
 # Prelim results ----------------------
 # Veg composition
-a1 <- model$BUGSoutput$sims.list$a1 # Might need to revisit this cov
+a1 <- model$BUGSoutput$sims.list$a1
 
 a1s <- data.frame(mean = apply(a1, 2, mean),
-           lo = apply(a1, 2, quantile, 0.025),
-           hi = apply(a1, 2, quantile, 0.975))
+           lo = apply(a1, 2, quantile, 0.125),
+           hi = apply(a1, 2, quantile, 0.875)) %>%
+  mutate(sig = NA) %>%
+  mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+                         TRUE ~ ""))
 rownames(a1s) <- colnames(site.occ)[-1]
 
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
+  geom_point(aes(x = rownames(a1s), y = 7, color = sig), shape = 8)+
+  scale_color_manual(values = c("white", "black"))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   hjust = 1.1),
+        panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegcomp95cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "vegcomp75cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Veg structure
@@ -601,17 +634,22 @@ a2 <- model$BUGSoutput$sims.list$a2
 
 a2s <- data.frame(mean = apply(a2, 2, mean),
            lo = apply(a2, 2, quantile, 0.125),
-           hi = apply(a2, 2, quantile, 0.875))
+           hi = apply(a2, 2, quantile, 0.875)) %>%
+      mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+                         TRUE ~ ""))
 rownames(a2s) <- colnames(site.occ)[-1]
 
 ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
+  geom_point(aes(x = rownames(a1s), y = 4, color = sig), shape = 8)+
+  scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   hjust = 1.1),
+        panel.grid = element_blank(), legend.position = "None")
 
 # ggsave(filename = "vegheight75cov.jpeg", width = 9, height = 4,
 #        units = "in")
@@ -619,14 +657,14 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
 
-b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.025))
+b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.125))
 colnames(b1lo) <- levels(hostspec)
 b1lo$Ecto <- sort(unique(mecto.caps$Ecto))
 
 b1lo <- pivot_longer(b1lo, cols = -Ecto, 
                      names_to = "host", values_to = "lo")
 
-b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.975))
+b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.875))
 colnames(b1hi) <- levels(hostspec)
 b1hi$Ecto <- sort(unique(mecto.caps$Ecto))
 
@@ -664,7 +702,7 @@ for(i in 1:length(ecto.specs)){
 }
 
 # for(i in 1:length(plotlist)){
-#   ggsave(plotlist[[i]], filename = paste("95cihost", i, ".jpeg",
+#   ggsave(plotlist[[i]], filename = paste("75cihost", i, ".jpeg",
 #                                          sep = ""),
 #          width = 5, height = 3, units = "in")
 # }
@@ -674,17 +712,23 @@ b2 <- model$BUGSoutput$sims.list$b2
 
 b2s <- data.frame(mean = colMeans(b2),
            lo = apply(b2, 2, quantile, 0.125),
-           hi = apply(b2, 2, quantile, 0.875))
+           hi = apply(b2, 2, quantile, 0.875)) %>%
+  mutate(sig = NA) %>%
+  mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+                         TRUE ~ ""))
 rownames(b2s) <- colnames(site.occ)[-1]
 
 ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
+  geom_point(aes(x = rownames(a1s), y = 1, color = sig), shape = 8)+
+  scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Mass Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   hjust = 1.1),
+        panel.grid = element_blank(), legend.position = "None")
 
 # ggsave(filename = "hostmass75cov.jpeg", width = 9, height = 4,
 #        units = "in")
@@ -693,23 +737,29 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
 b3 <- model$BUGSoutput$sims.list$b3
 
 b3s <- data.frame(mean = apply(b3, 2, mean),
-           lo = apply(b3, 2, quantile, 0.025),
-           hi = apply(b3, 2, quantile, 0.975))
+           lo = apply(b3, 2, quantile, 0.125),
+           hi = apply(b3, 2, quantile, 0.875)) %>%
+  mutate(sig = NA) %>%
+  mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+                         TRUE ~ ""))
 rownames(b3s) <- colnames(site.occ)[-1]
 
 ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
+  geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
+  scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Sex Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   hjust = 1.1),
+        panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "hostsex95cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "hostsex75cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
-# Effect of capture no.
+# Effect of capture no. RESUME HERE -------------
 c1 <- model$BUGSoutput$sims.list$c1
 
 c1s <- data.frame(mean = apply(c1, 2, mean), 
