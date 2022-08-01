@@ -33,10 +33,12 @@ for(i in 1:length(mamm.raw$Date)){
 mamm.2020 <- mamm.raw %>%
   mutate(Date = as.Date(Date, format = "%d/%m/%Y")) %>%
   filter(Date > as.Date("2020-01-01")) %>%
-  select(Site:Day, Tag, Abbrev:Mass, Ecto) %>%
+  select(Site:Day, Tag, Abbrev:Mass, Ecto, Desc.) %>%
   filter(Tag != "") %>%
+  filter(Desc. == "") %>%
   filter(!Abbrev %in% c("", "PE??", "SOCI")) %>%
-  rename("SampleNo." = Ecto)
+  rename("SampleNo." = Ecto) %>%
+  select(!Desc.)
 
 # Ectos 
 ecto.clean <- ecto.raw %>%
@@ -592,9 +594,9 @@ inits <- function(){
 
 # Send model to JAGS
 # model <- jags(model.file = 'ectomod.txt', data = datalist,
-#               n.chains = 3,
-#               parameters.to.save = params, inits = inits,
-#               n.burnin = 8000, n.iter = 15000, n.thin = 10)
+#               n.chains = 3, parameters.to.save = params, 
+#               inits = inits, n.burnin = 4000, n.iter = 7500, 
+#               n.thin = 10)
 
 # Save model
 # saveRDS(model, file = "ectomod.rds")
@@ -607,8 +609,8 @@ model <- readRDS("ectomod.rds")
 a1 <- model$BUGSoutput$sims.list$a1
 
 a1s <- data.frame(mean = apply(a1, 2, mean),
-           lo = apply(a1, 2, quantile, 0.125),
-           hi = apply(a1, 2, quantile, 0.875)) %>%
+           lo = apply(a1, 2, quantile, 0.025),
+           hi = apply(a1, 2, quantile, 0.975)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
@@ -617,7 +619,7 @@ rownames(a1s) <- colnames(site.occ)[-1]
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_point(aes(x = rownames(a1s), y = 7, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 10, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
@@ -626,15 +628,15 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegcomp75cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "vegcomp95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Veg structure
 a2 <- model$BUGSoutput$sims.list$a2
 
 a2s <- data.frame(mean = apply(a2, 2, mean),
-           lo = apply(a2, 2, quantile, 0.125),
-           hi = apply(a2, 2, quantile, 0.875)) %>%
+           lo = apply(a2, 2, quantile, 0.025),
+           hi = apply(a2, 2, quantile, 0.975)) %>%
       mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
 rownames(a2s) <- colnames(site.occ)[-1]
@@ -643,7 +645,7 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 4, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 6, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
   theme_bw()+
@@ -651,20 +653,20 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegheight75cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "vegheight95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
 
-b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.125))
+b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.025))
 colnames(b1lo) <- levels(hostspec)
 b1lo$Ecto <- sort(unique(mecto.caps$Ecto))
 
 b1lo <- pivot_longer(b1lo, cols = -Ecto, 
                      names_to = "host", values_to = "lo")
 
-b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.875))
+b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.975))
 colnames(b1hi) <- levels(hostspec)
 b1hi$Ecto <- sort(unique(mecto.caps$Ecto))
 
@@ -702,7 +704,7 @@ for(i in 1:length(ecto.specs)){
 }
 
 # for(i in 1:length(plotlist)){
-#   ggsave(plotlist[[i]], filename = paste("75cihost", i, ".jpeg",
+#   ggsave(plotlist[[i]], filename = paste("95cihost", i, ".jpeg",
 #                                          sep = ""),
 #          width = 5, height = 3, units = "in")
 # }
@@ -711,8 +713,8 @@ for(i in 1:length(ecto.specs)){
 b2 <- model$BUGSoutput$sims.list$b2
 
 b2s <- data.frame(mean = colMeans(b2),
-           lo = apply(b2, 2, quantile, 0.125),
-           hi = apply(b2, 2, quantile, 0.875)) %>%
+           lo = apply(b2, 2, quantile, 0.025),
+           hi = apply(b2, 2, quantile, 0.975)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
@@ -722,7 +724,7 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 1, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Mass Coefficient")+
   theme_bw()+
@@ -730,15 +732,15 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "hostmass75cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "hostmass95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # host sex
 b3 <- model$BUGSoutput$sims.list$b3
 
 b3s <- data.frame(mean = apply(b3, 2, mean),
-           lo = apply(b3, 2, quantile, 0.125),
-           hi = apply(b3, 2, quantile, 0.875)) %>%
+           lo = apply(b3, 2, quantile, 0.025),
+           hi = apply(b3, 2, quantile, 0.975)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
@@ -748,7 +750,7 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
+  # geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Sex Coefficient")+
   theme_bw()+
@@ -756,47 +758,58 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "hostsex75cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "hostsex95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
-# Effect of capture no. RESUME HERE -------------
+# Effect of capture no
 c1 <- model$BUGSoutput$sims.list$c1
 
 c1s <- data.frame(mean = apply(c1, 2, mean), 
-           lo = apply(c1, 2, quantile, 0.125), 
-           hi = apply(c1, 2, quantile, 0.875))
+           lo = apply(c1, 2, quantile, 0.025), 
+           hi = apply(c1, 2, quantile, 0.975)) %>%
+  mutate(sig = NA) %>%
+  mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+                         TRUE ~ ""))
 rownames(c1s) <- colnames(site.occ)[-1]
 
 ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
+  geom_point(aes(x = rownames(c1s), y = 0.8, color = sig), shape = 8)+
+  scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Capture no. Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   hjust = 1.1),
+        panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "capno75cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "capno95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Julian date
 c2 <- model$BUGSoutput$sims.list$c2
 
 c2s <- data.frame(mean = apply(c2, 2, mean), 
-           lo = apply(c2, 2, quantile, 0.125), 
-           hi = apply(c2, 2, quantile, 0.875))
+           lo = apply(c2, 2, quantile, 0.025), 
+           hi = apply(c2, 2, quantile, 0.975)) %>%
+  mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+                         TRUE ~ ""))
 rownames(c2s) <- colnames(site.occ)[-1]
 
 ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
+  geom_point(aes(x = rownames(c2s), y = 1, color = sig), shape = 8)+
+  scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Julian Date Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1.1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   hjust = 1.1),
+        panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "datecov75.jpeg", width = 9, height = 4,
+# ggsave(filename = "datecov95.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Bayesian r-squared ---------------------
@@ -875,17 +888,12 @@ site.df <- site.df %>%
                                     Order == "Mesostigmata" 
                                     ~ "Nest",
                                     Order == "Diptera" ~ "Diptera",
+                                    Order == "Psocodea" ~ "Fur",
                                     TRUE ~ Classification)) %>%
   mutate(hosts = as.numeric(hosts)) %>%
-  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 3,
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 5,
                            Ecto == "Ixodes_scapularis_nymph" ~ 5,
                            TRUE ~ hosts))
-
-# Make some quick plots
-qplot(data = site.df, x = Classification, y = site.r2, geom = "boxplot")
-qplot(data = site.df, x = Classification, y = median.r2, 
-      geom = "boxplot")
-# patterns are pretty close regardless of mean/median
 
 # Stat test
 site.aov <- summary(aov(data = site.df, 
@@ -896,13 +904,15 @@ site.aov[[1]]$`Sum Sq`[1]/(sum(site.aov[[1]]$`Sum Sq`))
 
 # full fig
 ggplot(data = site.df, aes(x = Classification, y = site.r2))+
-  geom_boxplot(fill = "lightgray")+
+  geom_boxplot(fill = "lightgray", outlier.shape = NA)+
+  geom_jitter(aes(color = Order))+
+  scale_color_viridis_d(end = 0.95)+
   labs(y = bquote("Site"~R^2))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "siter2.jpeg", height = 4, width = 4, units = "in",
-#        dpi = 600)
+# ggsave(filename = "siter2.jpeg", height = 4, width = 4,
+#        units = "in", dpi = 600)
 
 # Host-level r-squared
 mean.host.r2 <- apply(host.r2, 1, mean)
@@ -929,14 +939,12 @@ host.df <- host.df %>%
                                     Order == "Mesostigmata" ~ 
                                       "Nest",
                                     Order == "Diptera" ~ "Diptera",
+                                    Order == "Psocodea" ~ "Fur",
                                     TRUE ~ Classification)) %>%
   mutate(hosts = as.numeric(hosts)) %>%
-  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 3,
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 5,
                            Ecto == "Ixodes_scapularis_nymph" ~ 5,
                            TRUE ~ hosts))
-
-qplot(data = host.df, x = Classification, y = host.r2,
-      geom = "boxplot")
 
 # ANOVA
 host.aov <- summary(aov(formula = host.r2~Classification, 
@@ -947,13 +955,15 @@ host.aov[[1]]$`Sum Sq`[1]/(sum(host.aov[[1]]$`Sum Sq`))
 
 # Final fig
 ggplot(data = host.df, aes(x = Classification, y = host.r2))+
-  geom_boxplot(fill = 'lightgray')+
+  geom_boxplot(fill = 'lightgray', outlier.shape = NA)+
+  geom_jitter(aes(color = Order))+
+  scale_color_viridis_d(end = 0.95)+
   labs(y = bquote("Host"~R^2))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "hostr2.jpeg", height = 4, width = 4, units = 'in',
-#        dpi = 600)
+# ggsave(filename = "hostr2.jpeg", height = 4, width = 4,
+#        units = 'in', dpi = 600)
 
 # R-squared vs. host specificity -------------------
 summary(lm(data = site.df, formula = hosts~site.r2))
@@ -961,7 +971,7 @@ summary(lm(data = host.df, formula = hosts~host.r2))
 # This is wild
 
 ggplot(data = site.df, aes(x = site.r2, y = hosts))+
-  geom_point()+
+  geom_point(aes(color = Classification))+
   # geom_smooth(se = F, method = 'lm', color = "black")+
   labs(x = bquote("Site"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
@@ -972,8 +982,8 @@ ggplot(data = site.df, aes(x = site.r2, y = hosts))+
 # ggsave("siter2hostfam.jpeg", height =3, width = 5, units = "in")
 
 ggplot(data = host.df, aes(x = host.r2, y = hosts))+
-  geom_point()+
-  # geom_smooth(se = F, method = 'lm', color = "black")+
+  geom_point(aes(color = Classification))+
+  geom_smooth(se = F, method = 'lm', color = "black")+
   labs(x = bquote("Host"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
@@ -982,73 +992,22 @@ ggplot(data = host.df, aes(x = host.r2, y = hosts))+
 # ggsave("hostr2hostsub.jpeg", height = 3, width = 5, units = "in")
 # ggsave("hostr2hostfam.jpeg", height = 3, width = 5, units = "in")
 
-# Covariate sig figs ------------------------
-# Site covs
-sitecov <- read.csv("CovFigsSite.csv") %>%
-  pivot_longer(cols = -Cov, names_to = "Ecto", values_to = "Sig") 
+# Hosts per classification ------------------
+numhost.aov<- aov(formula = hosts~Classification, 
+               data = site.df)
 
-sitecov$Sig[sitecov$Sig == ""] <- NA
+numhost <- summary(numhost.aov)
+numhost[[1]]$`Sum Sq`[1]/(sum(numhost[[1]]$`Sum Sq`))
 
-site.cov <- site.df %>%
-  select(Ecto, Classification) %>%
-  full_join(sitecov, by = "Ecto") %>%
-  arrange(Classification) %>%
-  mutate(Ecto = factor(Ecto, levels = unique(.$Ecto)))
+hsd <- HSD.test(y = numhost.aov, trt = "Classification")
 
-ggplot(data = site.cov, aes(x = Cov, y = Ecto, fill = Sig))+
-  geom_raster()+
-  labs(x = "Site Covariate")+
-  scale_fill_manual(na.value = "white", 
-                    values = c("red3","dodgerblue2"))+
-  theme_bw()+
-  theme(axis.title.y = element_blank(), panel.grid = element_blank())
+ggplot(data = site.df, aes(x = Classification, y = hosts))+
+  geom_boxplot(fill = 'lightgray')+
+  geom_jitter(aes(color = Order))+
+  geom_text(data = hsd$groups, aes(x = rownames(hsd$groups),
+                                   label = groups, y = 6.5))+
+  labs(y = "Number of Host Species")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
 
-# ggsave(filename = "sitecovfig.jpeg", height = 6, width = 4.5,
-#        units = "in")
-
-# Host covs
-hostcov <- read.csv("CovFigsHost.csv") %>%
-  pivot_longer(cols = -Cov, names_to = "Ecto", values_to = "Sig") 
-
-hostcov$Sig[hostcov$Sig == ""] <- NA
-
-host.cov <- site.df %>%
-  select(Ecto, Classification) %>%
-  full_join(hostcov, by = "Ecto") %>%
-  arrange(Classification) %>%
-  mutate(Ecto = factor(Ecto, levels = unique(.$Ecto))) %>%
-  mutate(Cov = factor(Cov, levels = unique(hostcov$Cov))) 
-
-ggplot(data = host.cov, aes(x = Cov, y = Ecto, fill = Sig))+
-  geom_raster()+
-  labs(x = "Host Covariate")+
-  scale_fill_manual(na.value = "white", 
-                    values = c("red3","dodgerblue2"))+
-  theme_bw()+
-  theme(axis.title.y = element_blank(), panel.grid = element_blank())
-
-# ggsave(filename = "hostcovfig.jpeg", height = 6, width = 7,
-#        units = "in")
-
-# Detection covs
-detcov <- read.csv("CovFigsDet.csv") %>%
-  pivot_longer(cols = -Cov, names_to = "Ecto", values_to = "Sig") 
-
-detcov$Sig[detcov$Sig == ""] <- NA
-
-det.cov <- site.df %>%
-  select(Ecto, Classification) %>%
-  full_join(detcov, by = "Ecto") %>%
-  arrange(Classification) %>%
-  mutate(Ecto = factor(Ecto, levels = unique(.$Ecto)))  
-
-ggplot(data = det.cov, aes(x = Cov, y = Ecto, fill = Sig))+
-  geom_raster()+
-  labs(x = "Detection Covariate")+
-  scale_fill_manual(na.value = "white", 
-                    values = c("red3","dodgerblue2"))+
-  theme_bw()+
-  theme(axis.title.y = element_blank(), panel.grid = element_blank())
-
-# ggsave(filename = "detcovfig.jpeg", height = 6, width = 4,
-#        units = "in")
+# ggsave("numhosts.jpeg", height = 3, width = 5, units = "in")
