@@ -13,6 +13,11 @@ library(viridis)
 library(abind)
 library(R2jags)
 library(multiApply)
+library(agricolae)
+library(gridExtra)
+library(grid)
+library(rstatix)
+library(patchwork)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -356,6 +361,11 @@ caplist <- cap.convert(mecto.days, 4:12, 1:3)
 mecto.caps <- do.call("rbind", caplist)
 mecto.caps <- mecto.caps[,-12]
 
+mecto.caps <- mecto.caps %>%
+  group_by(Tag) %>%
+  filter(is.na(`2`) == F) %>% #| sum(`1`) >= 1) %>%
+  ungroup()
+
 # Convert to list
 ecto.list <- split(mecto.caps, mecto.caps$Ecto)
 
@@ -388,26 +398,126 @@ veg.site <- veg.2020 %>%
 
 comp.pc <- prcomp(veg.site[,10:15])
 
-comp.cov <- comp.pc$x[,1]
+comp.cov1 <- comp.pc$x[,1]
+comp.cov1 <- as.vector(scale(comp.cov1))
 
-comp.cov <- as.vector(scale(comp.cov))
+comp.cov2 <- comp.pc$x[,2]
+comp.cov2 <- as.vector(scale(comp.cov2))
+
+comp.frame <- cbind(veg.site, pc1 = comp.cov, pc2 = comp.pc$x[,2])
+
+p <- ggplot(data = comp.frame, aes(x = pc1, y = pc2, color = Habitat))+
+  geom_point(size = 2)+
+  scale_color_viridis_d(end = 0.95)+
+  labs(x = "PC1", y = "PC2")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())+
+  annotation_custom(grob = textGrob(label = "Leaf Litter"), 
+                    ymin = -24, ymax = -24, xmin = 1.4, 
+                    xmax = 1.4)+
+  annotation_custom(grob = textGrob(label = "Grass/Forb"),
+                    ymin = -24, ymax = -24, xmin = -0.9,
+                    xmax = -0.9)+
+  annotation_custom(grob = textGrob(label = "Grass",
+                                    rot = 90),
+                    ymin = -17, ymax = -17, xmin = -1.7,
+                    xmax = -1.7)+
+  annotation_custom(grob = textGrob(label = "Forb", rot = 90),
+                    ymin = 19, ymax = 19, xmin = -1.7,
+                    xmax = -1.7)
+
+gt <- ggplot_gtable(ggplot_build(p))
+gt$layout$clip[gt$layout$name == "panel"] <- "off"
+grid.draw(gt)
+
+# ggsave(filename = "pc1.jpeg", width = 4, height = 4, units = "in")
 
 # Site covariate: Veg complexity -----------------
 height.pc <- prcomp(veg.site[,4:9])
 
-height.cov <- height.pc$x[,1]
+height.cov <- height.pc$x[,2]
 
 height.cov <- as.vector(scale(height.cov))
+
+height.frame <- cbind(veg.site, pc1 = height.cov, 
+                      pc2 = height.pc$x[,2])
+
+p <- ggplot(data = height.frame, aes(x = pc1, y = pc2, 
+                                     color = Habitat))+
+  geom_point(size = 2)+
+  scale_color_viridis_d(end = 0.95)+
+  labs(x = "PC1 (Decreasing Complexity)", y = "PC2")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())+
+  annotation_custom(grob = textGrob(label = "10 cm tall",
+                                    rot = 90),
+                    ymin = -0.5, ymax = -0.5, xmin = -2.35,
+                    xmax = -2.35)+
+  annotation_custom(grob = textGrob(label = "30 cm tall", rot = 90),
+                    ymin = 0.4, ymax = 0.4, xmin = -2.35,
+                    xmax = -2.35)
+
+gt <- ggplot_gtable(ggplot_build(p))
+gt$layout$clip[gt$layout$name == "panel"] <- "off"
+grid.draw(gt)
+
+# ggsave(filename = "pc2.jpeg", width = 4, height = 4, 
+#        units = "in")
+
+# Both pc's ---------------------
+pcs <- data.frame(Site = height.frame$Site, 
+                  Habitat = height.frame$Habitat,
+                  CompPC = comp.frame$pc1, 
+                  HeightPC = height.frame$pc1)
+
+ggplot(data = pcs, aes(x = CompPC, y = HeightPC, color = Habitat))+
+  geom_point(size = 2)+
+  labs(x = "Composition PC", y = "Vertical Structure PC")+
+  scale_color_viridis_d(end = 0.95)+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+cor.test(x = pcs$HeightPC, y = pcs$CompPC)
 
 # Alt veg covariate: pca with everything ----------------
 veg.pc <- prcomp(veg.site[,4:15])
 
-veg.cov <- veg.pc$x[,1]
+veg1 <- veg.pc$x[,1]
 
-veg.cov <- as.vector(scale(veg.cov))
+veg1 <- as.vector(scale(veg1))
 
-# Site covariate: host abund -----------------------
-hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
+veg2 <- veg.pc$x[,2]
+
+veg2 <- as.vector(scale(veg2))
+
+veg.frame <- cbind(veg.site, pc1 = veg1, 
+                      pc2 = veg2)
+
+p <- ggplot(data = veg.frame, aes(x = pc1, y = pc2, 
+                                     color = Habitat))+
+  geom_point(size = 2)+
+  scale_color_viridis_d(end = 0.95)+
+  labs(x = "PC1", y = "PC2")+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())+
+  annotation_custom(grob = textGrob(label = "Grass",
+                                    rot = 90),
+                    ymin = -17, ymax = -17, xmin = -70,
+                    xmax = -70)+
+  annotation_custom(grob = textGrob(label = "Forb", rot = 90),
+                    ymin = 19, ymax = 19, xmin = -70,
+                    xmax = -70)+
+  annotation_custom(grob = textGrob(label = "Dead Veg"),
+                    ymin = -25, ymax = -25, xmin = 50, xmax = 50)+
+  annotation_custom(grob = textGrob(label = "Grass/Forb"),
+                    ymin = -25, ymax = -25, xmin = -45, xmax = -45)
+
+gt <- ggplot_gtable(ggplot_build(p))
+gt$layout$clip[gt$layout$name == "panel"] <- "off"
+grid.draw(gt)
+
+# ggsave(gt, filename = "vegpc.jpeg", width = 4.5, height = 4.5,
+#        units = "in")
 
 # Host covariate: Species -----------------------
 # Get species abbrev of each host
@@ -452,12 +562,15 @@ dates.frame <- mecto.clean %>%
   distinct() %>%
   pivot_wider(names_from = Day, values_from = julian) %>%
   arrange(Tag) %>%
-  relocate(Tag, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`)
+  relocate(Tag, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`) %>%
+  filter(Tag %in% mecto.caps$Tag)
 
 dateslist <- cap.convert(dates.frame, 2:10, 1)
 
 dates <- do.call("rbind", dateslist)
 dates <- dates[,c(-1, -10)]
+
+# dates <- dates[-which(rowSums(is.na(dates))==7),]
   
 # Write model -------------------------
 cat("
@@ -524,7 +637,8 @@ cat("
       # Occupancy model: Site
       for(j in 1:nsite){
       
-        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*height[j]
+        logit(psi[j,i]) <- a0[i] + a1[i]*deadveg[j] + 
+                            a2[i]*grassforb[j] 
         Z[j,i] ~ dbern(psi[j,i])
 
         # Occupancy model: Host
@@ -551,7 +665,7 @@ cat("
 
 # Set up model --------------------------
 # Define no. of ectos, sites, hosts, etc.
-necto <- length(unique(mecto.caps$Ecto))
+necto <- length(unique(mecto.caps$Ecto))-2
 
 nsite <- length(unique(site.vec))
 
@@ -568,16 +682,19 @@ site.occ <- mecto.caps %>%
   arrange(Site) %>%
   pivot_wider(names_from = Ecto, values_from = Occ)
 
-sitemax <- as.matrix(site.occ[,-1])
+sitemax <- as.matrix(site.occ[,-c(1,2,5)])
 
-hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)
+hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)[,-c(1,4)]
+
+hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 
 # Define data to send and params to keep
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
-                 obs = ecto.ar, tagmat = tagmat, hostvec = hostvec, 
+                 obs = ecto.ar[,,-c(1,4)], tagmat = tagmat,
+                 hostvec = hostvec, 
                  host = hostspec, K = length(unique(hostspec)), 
-                 mass = hostmass, cover = comp.cov, 
-                 height = height.cov,
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
                  julian = dates)
 
@@ -593,33 +710,41 @@ inits <- function(){
 }
 
 # Send model to JAGS
-# model <- jags(model.file = 'ectomod.txt', data = datalist,
-#               n.chains = 3, parameters.to.save = params, 
-#               inits = inits, n.burnin = 4000, n.iter = 7500, 
-#               n.thin = 10)
+model <- jags(model.file = 'ectomod.txt', data = datalist,
+              n.chains = 3, parameters.to.save = params,
+              inits = inits, n.burnin = 4000, n.iter = 7500,
+              n.thin = 10)
 
 # Save model
 # saveRDS(model, file = "ectomod.rds")
+# saveRDS(model, file = "sansO_leucopus.rds")
+# saveRDS(model, file = "sans1cap.rds")
+# saveRDS(model, file = "sans0caps0ecto.rds")
 
 # Load model
-model <- readRDS("ectomod.rds")
+# model <- readRDS("ectomod.rds")
+# model <- readRDS("sansO_leucopus.rds")
+# model <- readRDS("sans1cap.rds")
+# model <- readRDS("sans0caps0ecto.rds")
 
-# Prelim results ----------------------
-# Veg composition
+# Model selection ------------------------
+
+# Covariate results ----------------------
+# Veg composition: forest or not
 a1 <- model$BUGSoutput$sims.list$a1
 
 a1s <- data.frame(mean = apply(a1, 2, mean),
-           lo = apply(a1, 2, quantile, 0.025),
-           hi = apply(a1, 2, quantile, 0.975)) %>%
+           lo = apply(a1, 2, quantile, 0.125),
+           hi = apply(a1, 2, quantile, 0.875)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(a1s) <- colnames(site.occ)[-1]
+rownames(a1s) <- colnames(site.occ)[-c(1,2,5)]
 
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_point(aes(x = rownames(a1s), y = 10, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 6, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
@@ -628,24 +753,24 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegcomp95cov.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "vegforest75cov.jpeg", width = 9, 
+#        height = 4,units = "in")
 
-# Veg structure
+# Veg comp: grass or forb
 a2 <- model$BUGSoutput$sims.list$a2
 
 a2s <- data.frame(mean = apply(a2, 2, mean),
-           lo = apply(a2, 2, quantile, 0.025),
-           hi = apply(a2, 2, quantile, 0.975)) %>%
+           lo = apply(a2, 2, quantile, 0.125),
+           hi = apply(a2, 2, quantile, 0.875)) %>%
       mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(a2s) <- colnames(site.occ)[-1]
+rownames(a2s) <- colnames(site.occ)[-c(1,2,5)]
 
 ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 6, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 2, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
   theme_bw()+
@@ -653,29 +778,29 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegheight95cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "vegforb95cov.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
 
-b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.025))
+b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.125))
 colnames(b1lo) <- levels(hostspec)
-b1lo$Ecto <- sort(unique(mecto.caps$Ecto))
+b1lo$Ecto <- sort(unique(mecto.caps$Ecto))[-c(1,4)]
 
 b1lo <- pivot_longer(b1lo, cols = -Ecto, 
                      names_to = "host", values_to = "lo")
 
-b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.975))
+b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.875))
 colnames(b1hi) <- levels(hostspec)
-b1hi$Ecto <- sort(unique(mecto.caps$Ecto))
+b1hi$Ecto <- sort(unique(mecto.caps$Ecto))[-c(1,4)]
 
 b1hi <- pivot_longer(b1hi, cols = -Ecto, 
                      names_to = "host", values_to = "hi")
 
 b1mean <- as.data.frame(apply(b1, c(2,3), mean))
 colnames(b1mean) <- levels(hostspec)
-b1mean$Ecto <- sort(unique(mecto.caps$Ecto))
+b1mean$Ecto <- sort(unique(mecto.caps$Ecto))[-c(1,4)]
 
 b1mean <- pivot_longer(b1mean, cols = -Ecto,
                        names_to = "host", values_to = "mean")
@@ -713,18 +838,18 @@ for(i in 1:length(ecto.specs)){
 b2 <- model$BUGSoutput$sims.list$b2
 
 b2s <- data.frame(mean = colMeans(b2),
-           lo = apply(b2, 2, quantile, 0.025),
-           hi = apply(b2, 2, quantile, 0.975)) %>%
+           lo = apply(b2, 2, quantile, 0.125),
+           hi = apply(b2, 2, quantile, 0.875)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(b2s) <- colnames(site.occ)[-1]
+rownames(b2s) <- colnames(site.occ)[-c(1,2,5)]
 
 ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 1, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Mass Coefficient")+
   theme_bw()+
@@ -739,18 +864,18 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
 b3 <- model$BUGSoutput$sims.list$b3
 
 b3s <- data.frame(mean = apply(b3, 2, mean),
-           lo = apply(b3, 2, quantile, 0.025),
-           hi = apply(b3, 2, quantile, 0.975)) %>%
+           lo = apply(b3, 2, quantile, 0.125),
+           hi = apply(b3, 2, quantile, 0.875)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(b3s) <- colnames(site.occ)[-1]
+rownames(b3s) <- colnames(site.occ)[-c(1,2,5)]
 
 ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  # geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 1.2, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Sex Coefficient")+
   theme_bw()+
@@ -765,12 +890,12 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
 c1 <- model$BUGSoutput$sims.list$c1
 
 c1s <- data.frame(mean = apply(c1, 2, mean), 
-           lo = apply(c1, 2, quantile, 0.025), 
-           hi = apply(c1, 2, quantile, 0.975)) %>%
+           lo = apply(c1, 2, quantile, 0.125), 
+           hi = apply(c1, 2, quantile, 0.875)) %>%
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(c1s) <- colnames(site.occ)[-1]
+rownames(c1s) <- colnames(site.occ)[-c(1,2,5)]
 
 ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
   geom_point()+
@@ -795,13 +920,13 @@ c2s <- data.frame(mean = apply(c2, 2, mean),
            hi = apply(c2, 2, quantile, 0.975)) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(c2s) <- colnames(site.occ)[-1]
+rownames(c2s) <- colnames(site.occ)[-c(1,2,5)]
 
 ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(c2s), y = 1, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(c2s), y = 1.2, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Julian Date Coefficient")+
   theme_bw()+
@@ -854,7 +979,7 @@ host.r2 <- Apply(data = list(host.res, host.yhat), margins = 2,
 
 # R2 Figures ------------------------
 # Vector of species names
-ecto.specs <- names(ecto.list2)
+ecto.specs <- names(ecto.list2)[-c(1,4)]
 
 # Site-level r-squared
 mean.site.r2 <- apply(site.r2, 1, mean)
@@ -878,6 +1003,7 @@ site.df <- site.df %>%
 fleaclass <- read.csv("FleaClassifications.csv") %>%
   unite(col = "Ecto", Genus, Species, sep = "_") %>%
   select(Ecto, Classification)
+fleaclass <- fleaclass[-2,]
 
 # Merge with site df
 site.df <- site.df %>%
@@ -896,11 +1022,13 @@ site.df <- site.df %>%
                            TRUE ~ hosts))
 
 # Stat test
-site.aov <- summary(aov(data = site.df, 
-                        formula = site.r2~Classification))
+kruskal.test(formula = site.r2~Classification, 
+             data = site.df[site.df$Classification != "Diptera",])
+# Kruskal because variances and sample sizes are different
 
 # Eta-sq (effect size)
-site.aov[[1]]$`Sum Sq`[1]/(sum(site.aov[[1]]$`Sum Sq`))
+kruskal_effsize(data = site.df[site.df$Classification != "Diptera",],
+                formula = site.r2~Classification)
 
 # full fig
 ggplot(data = site.df, aes(x = Classification, y = site.r2))+
@@ -911,7 +1039,13 @@ ggplot(data = site.df, aes(x = Classification, y = site.r2))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "siter2.jpeg", height = 4, width = 4,
+# ggsave(filename = "siter2.jpeg", height = 4, width = 6,
+#        units = "in", dpi = 600)
+# ggsave(filename = "siter2sans0.jpeg", height = 4, width = 6,
+#        units = "in", dpi = 600)
+# ggsave(filename = "siter2_0caps.jpeg", height = 4, width = 6,
+#        units = "in", dpi = 600)
+# ggsave(filename = "siter2_0caps0ecto.jpeg", height = 4, width = 6,
 #        units = "in", dpi = 600)
 
 # Host-level r-squared
@@ -946,12 +1080,17 @@ host.df <- host.df %>%
                            Ecto == "Ixodes_scapularis_nymph" ~ 5,
                            TRUE ~ hosts))
 
-# ANOVA
-host.aov <- summary(aov(formula = host.r2~Classification, 
-                        data = host.df))
-host.aov[[1]]$`Sum Sq`[1]/(sum(host.aov[[1]]$`Sum Sq`))
-# eta2 is quite high actually- nonsig could be due 
-# to high variability in nest guys
+# Stat test
+kruskal.test(formula = host.r2~Classification, 
+             data = host.df[host.df$Classification != "Diptera",])
+# Kruskal because variances and sample sizes are different
+# No Diptera because there is 1 species, 2 total
+
+# Eta-sq (effect size)
+kruskal_effsize(data = host.df[host.df$Classification != "Diptera",],
+                formula = host.r2~Classification)
+dunn_test(data = host.df[host.df$Classification != "Diptera",],
+          formula = host.r2~Classification)
 
 # Final fig
 ggplot(data = host.df, aes(x = Classification, y = host.r2))+
@@ -962,7 +1101,13 @@ ggplot(data = host.df, aes(x = Classification, y = host.r2))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "hostr2.jpeg", height = 4, width = 4,
+# ggsave(filename = "hostr2.jpeg", height = 4, width = 6,
+#        units = 'in', dpi = 600)
+# ggsave(filename = "hostr2_sansO.jpeg", height = 4, width = 6,
+#        units = 'in', dpi = 600)
+# ggsave(filename = "hostr2_2caps.jpeg", height = 4, width = 6,
+#        units = 'in', dpi = 600)
+# ggsave(filename = "hostr2_0caps0ecto.jpeg", height = 4, width = 6,
 #        units = 'in', dpi = 600)
 
 # R-squared vs. host specificity -------------------
@@ -971,8 +1116,9 @@ summary(lm(data = host.df, formula = hosts~host.r2))
 # This is wild
 
 ggplot(data = site.df, aes(x = site.r2, y = hosts))+
-  geom_point(aes(color = Classification))+
+  geom_point(aes(color = Classification), size = 2)+
   # geom_smooth(se = F, method = 'lm', color = "black")+
+  scale_color_viridis_d(end = 0.95)+
   labs(x = bquote("Site"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
@@ -982,8 +1128,9 @@ ggplot(data = site.df, aes(x = site.r2, y = hosts))+
 # ggsave("siter2hostfam.jpeg", height =3, width = 5, units = "in")
 
 ggplot(data = host.df, aes(x = host.r2, y = hosts))+
-  geom_point(aes(color = Classification))+
+  geom_point(aes(color = Classification), size = 2)+
   geom_smooth(se = F, method = 'lm', color = "black")+
+  scale_color_viridis_d(end = 0.95)+
   labs(x = bquote("Host"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
@@ -993,21 +1140,143 @@ ggplot(data = host.df, aes(x = host.r2, y = hosts))+
 # ggsave("hostr2hostfam.jpeg", height = 3, width = 5, units = "in")
 
 # Hosts per classification ------------------
-numhost.aov<- aov(formula = hosts~Classification, 
-               data = site.df)
+# Stat test
+kruskal.test(formula = hosts~Classification, data = site.df)
+# Kruskal because variances and sample sizes are different
 
-numhost <- summary(numhost.aov)
-numhost[[1]]$`Sum Sq`[1]/(sum(numhost[[1]]$`Sum Sq`))
-
-hsd <- HSD.test(y = numhost.aov, trt = "Classification")
+# Eta-sq (effect size)
+kruskal_effsize(data = site.df, formula = hosts~Classification)
 
 ggplot(data = site.df, aes(x = Classification, y = hosts))+
   geom_boxplot(fill = 'lightgray')+
   geom_jitter(aes(color = Order))+
-  geom_text(data = hsd$groups, aes(x = rownames(hsd$groups),
-                                   label = groups, y = 6.5))+
+  scale_color_viridis_d(end = 0.95)+
   labs(y = "Number of Host Species")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
 # ggsave("numhosts.jpeg", height = 3, width = 5, units = "in")
+
+# Cov rasters: site covs ------------------------------------
+# add site cov columns
+a1s$cov <- "Forest/Not"
+a2s$cov <- "Grass(-)/Forb(+)"
+
+a1s$ecto <- rownames(a1s)
+a2s$ecto <- rownames(a2s)
+
+# merge into single df
+as <- rbind(a1s, a2s)
+
+# Add life histories
+as <- left_join(as, site.df, by = c("ecto" = "Ecto"))
+
+# Create plot
+aplot <- list()
+for(i in 1:length(unique(as$Classification))){
+  aplot[[i]] <- ggplot(data = as[as$Classification == unique(as$Classification)[i],], 
+         aes(x = cov, y = ecto, fill = sig))+
+    geom_raster()+
+    scale_fill_manual(values = c("white", "black"))+
+    labs(title = unique(as$Classification)[i], x = "Covariate")+
+    coord_fixed(ratio = 0.5)+
+    theme_bw()+
+    theme(panel.grid = element_blank(), legend.position = "none",
+          axis.title.y = element_blank())
+}
+
+aplot[[1]]+aplot[[3]]
+# ggsave(filename = "sigsitecovs.jpeg", height = 6, width = 8.5,
+#        units = "in")
+
+# Cov rasters: host species -------------------------
+hilo <- hilo %>%
+  mutate(Sig = case_when(hilo$lo > 0 ~ "+",
+                         hilo$hi < 0 ~ "-",
+                         TRUE ~ ""))
+hilo.plt <- left_join(hilo, site.df, by = "Ecto")
+
+specplot <- list()
+for(i in 1:length(unique(hilo.plt$Classification))){
+  specplot[[i]] <- ggplot(data = hilo.plt[hilo.plt$Classification == unique(hilo.plt$Classification)[i],], 
+                       aes(x = host, y = Ecto, fill = Sig))+
+    geom_raster()+
+    scale_fill_manual(values = c("white", "firebrick1", 
+                                 "dodgerblue3"))+
+    labs(title = unique(hilo.plt$Classification)[i], x = "Covariate")+
+    coord_fixed(ratio = 0.5)+
+    theme_bw()+
+    theme(panel.grid = element_blank(), legend.position = "none",
+          axis.title.y = element_blank())
+}
+
+specplot[[1]]/specplot[[3]]/specplot[[4]]
+
+# ggsave(filename = "hostspeccov.jpeg", width = 5, height = 6, 
+#        units = "in")
+
+# Cov rasters: other host covs -------------------------
+# add site cov columns
+b2s$cov <- "Mass"
+b3s$cov <- "Sex"
+
+b2s$ecto <- rownames(b2s)
+b3s$ecto <- rownames(b3s)
+
+# merge into single df
+bs.notspec <- rbind(b2s, b3s)
+
+# Add life histories
+bs.notspec <- left_join(bs.notspec, site.df, by = c("ecto" = "Ecto"))
+
+# Create plot
+bs.notspec.plot <- list()
+for(i in 1:length(unique(bs.notspec$Classification))){
+  bs.notspec.plot[[i]] <- ggplot(data = bs.notspec[bs.notspec$Classification == unique(bs.notspec$Classification)[i],], 
+                       aes(x = cov, y = ecto, fill = sig))+
+    geom_raster()+
+    scale_fill_manual(values = c("white", "black"))+
+    labs(title = unique(bs.notspec$Classification)[i], 
+         x = "Covariate")+
+    theme_bw()+
+    theme(panel.grid = element_blank(), legend.position = "none",
+          axis.title.y = element_blank())
+}
+
+bs.notspec.plot[[1]]+(bs.notspec.plot[[3]]/bs.notspec.plot[[4]])
+
+# ggsave(filename = "sighostcovs.jpeg", width = 6, height = 2)
+
+# Abundance per ecto species -----------
+ectoabund <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  mutate(Species = case_when(Genus == "Ixodes" & 
+                               Species == "scapularis" ~
+                               paste(Species, Other, sep = "_"),
+                             TRUE ~ Species)) %>%
+  select(Abbrev, Order, Family, Genus, Species) %>%
+  filter(Order != "" & is.na(Order)==F) %>%
+  unite(ecto, Genus, Species) %>%
+  group_by(ecto) %>%
+  summarise(abund = n())
+  
+abund <- left_join(ectoabund, site.df, by = c("ecto" = "Ecto"))
+
+ggplot(data = abund, aes(x = abund, y = ecto, fill = Classification))+
+  geom_col()+
+  scale_fill_viridis_d(end = 0.95)+
+  labs(x = "Abundance")+
+  theme_bw()+
+  theme(axis.title.y = element_blank(), panel.grid = element_blank())
+
+# ggsave(file = "ectoabund.jpeg", width = 5, height = 5, units = "in")
+
+abund.logit <- left_join(hilo.plt, ectoabund, 
+                         by = c("Ecto" = "ecto")) %>%
+  select(Ecto, abund, Classification, Sig) %>%
+  mutate(Sig = case_when(Sig == "" ~ 0,
+                         TRUE ~ 1)) 
+
+summary(glm(data = abund.logit, Sig ~ abund, family = "binomial"))
+
+# Host occupancy model -------------------------

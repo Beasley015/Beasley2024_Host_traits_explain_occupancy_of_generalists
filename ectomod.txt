@@ -62,7 +62,8 @@
       # Occupancy model: Site
       for(j in 1:nsite){
       
-        logit(psi[j,i]) <- a0[i] + a1[i]*cover[j] + a2[i]*height[j]
+        logit(psi[j,i]) <- a0[i] + a1[i]*deadveg[j] + 
+                            a2[i]*grassforb[j] 
         Z[j,i] ~ dbern(psi[j,i])
 
         # Occupancy model: Host
