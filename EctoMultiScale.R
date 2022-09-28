@@ -363,7 +363,7 @@ mecto.caps <- mecto.caps[,-12]
 
 mecto.caps <- mecto.caps %>%
   group_by(Tag) %>%
-  filter(is.na(`2`) == F) %>% #| sum(`1`) >= 1) %>%
+  filter(is.na(`2`) == F | sum(`1`) >= 1) %>% 
   ungroup()
 
 # Convert to list
@@ -569,8 +569,6 @@ dateslist <- cap.convert(dates.frame, 2:10, 1)
 
 dates <- do.call("rbind", dateslist)
 dates <- dates[,c(-1, -10)]
-
-# dates <- dates[-which(rowSums(is.na(dates))==7),]
   
 # Write model -------------------------
 cat("
@@ -665,7 +663,7 @@ cat("
 
 # Set up model --------------------------
 # Define no. of ectos, sites, hosts, etc.
-necto <- length(unique(mecto.caps$Ecto))-2
+necto <- length(unique(mecto.caps$Ecto))
 
 nsite <- length(unique(site.vec))
 
@@ -682,15 +680,15 @@ site.occ <- mecto.caps %>%
   arrange(Site) %>%
   pivot_wider(names_from = Ecto, values_from = Occ)
 
-sitemax <- as.matrix(site.occ[,-c(1,2,5)])
+sitemax <- as.matrix(site.occ[,-c(1)])
 
-hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)[,-c(1,4)]
+hostmax <- apply(ecto.ar, c(1,3), max, na.rm = T)#[,-c(1,4)]
 
 hostvec <- apply(tagmat, 2, function(x) length(na.omit(x)))
 
 # Define data to send and params to keep
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
-                 obs = ecto.ar[,,-c(1,4)], tagmat = tagmat,
+                 obs = ecto.ar, tagmat = tagmat,
                  hostvec = hostvec, 
                  host = hostspec, K = length(unique(hostspec)), 
                  mass = hostmass, deadveg = comp.cov1, 
@@ -710,24 +708,299 @@ inits <- function(){
 }
 
 # Send model to JAGS
-model <- jags(model.file = 'ectomod.txt', data = datalist,
-              n.chains = 3, parameters.to.save = params,
-              inits = inits, n.burnin = 4000, n.iter = 7500,
-              n.thin = 10)
+# model <- jags(model.file = 'ectomod.txt', data = datalist,
+#               n.chains = 3, parameters.to.save = params,
+#               inits = inits, n.burnin = 4000, n.iter = 7500,
+#               n.thin = 10)
 
 # Save model
 # saveRDS(model, file = "ectomod.rds")
-# saveRDS(model, file = "sansO_leucopus.rds")
 # saveRDS(model, file = "sans1cap.rds")
 # saveRDS(model, file = "sans0caps0ecto.rds")
 
 # Load model
 # model <- readRDS("ectomod.rds")
-# model <- readRDS("sansO_leucopus.rds")
-# model <- readRDS("sans1cap.rds")
+model <- readRDS("sans1cap.rds")
 # model <- readRDS("sans0caps0ecto.rds")
 
-# Model selection ------------------------
+# Model selection: site ------------------------
+# Full model
+model <- jags(model.file = 'ectomod.txt', data = datalist,
+              n.chains = 3, parameters.to.save = params,
+              inits = inits, n.burnin = 4000, n.iter = 7500,
+              n.thin = 10)
+
+samples.site.full <- jags.samples(model$model, 
+                             variable.names = c("WAIC"),
+                             n.iter = 5000, n.burnin = 1000, 
+                             n.thin = 1, type = "mean")
+
+# Intercept model
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, 
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
+
+params <- c('b1', 'b2', 'b3', 'c1', 'c2', 'psi','theta', 'Z', 'Y')
+
+model.site.intercept <- jags(model.file = 'ectomod_SiteIntercept.txt',
+                             data = datalist, n.chains = 3, 
+                             parameters.to.save = params,
+                             inits = inits, n.burnin = 4000, 
+                             n.iter = 7500, n.thin = 10)
+
+samples.site.intercept <- jags.samples(model.site.intercept$model, 
+                                       variable.names = c("WAIC"),
+                                       n.iter = 5000, n.burnin = 1000,
+                                       n.thin = 1, type = "mean")
+
+# Cov 1 only
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
+
+params <- c('a1', 'b1', 'b2', 'b3', 'c1', 'c2', 'psi',
+            'theta', 'Z', 'Y')
+
+model.site.deadveg <- jags(model.file = 'ectomodSite1.txt',
+                             data = datalist, n.chains = 3, 
+                             parameters.to.save = params,
+                             inits = inits, n.burnin = 4000, 
+                             n.iter = 7500, n.thin = 10)
+
+samples.site.deadveg <- jags.samples(model.site.deadveg$model, 
+                                       variable.names = c("WAIC"),
+                                       n.iter = 5000, n.burnin = 1000,
+                                       n.thin = 1, type = "mean")
+
+# Cov 2 only
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
+
+params <- c('a2', 'b1', 'b2', 'b3', 'c1', 'c2', 'psi',
+            'theta', 'Z', 'Y')
+
+model.site.grassforb <- jags(model.file = 'ectomodSite2.txt',
+                           data = datalist, n.chains = 3, 
+                           parameters.to.save = params,
+                           inits = inits, n.burnin = 4000, 
+                           n.iter = 7500, n.thin = 10)
+
+samples.site.grassforb <- jags.samples(model.site.grassforb$model, 
+                                     variable.names = c("WAIC"),
+                                     n.iter = 5000, n.burnin = 1000,
+                                     n.thin = 1, type = "mean")
+
+# Writing WAIC table
+WAIC.list <- list("Grass/Forb" = samples.site.grassforb[[1]])
+
+# Compare
+waic.frame.site <- data.frame(model = names(WAIC.list), 
+                         WAIC = unlist(lapply(WAIC.list, sum)))
+
+# load existing WAIC table
+# waic.table <- read.csv(file = "waic_site_1cap1ecto.csv")
+
+# combine with other WAICs and write table
+waic.frame.site <- rbind(waic.frame.site, waic.table)
+
+waic.frame.site <- arrange(waic.frame.site, WAIC)
+
+print(waic.frame.site)
+
+# write.csv(waic.frame.site, row.names = F,
+#           file = "waic_site_1cap1ecto.csv")
+
+# Model selection: host ---------------------
+# Full model
+model <- jags(model.file = 'ectomod.txt', data = datalist,
+              n.chains = 3, parameters.to.save = params,
+              inits = inits, n.burnin = 4000, n.iter = 7500,
+              n.thin = 10)
+
+samples.host.full <- jags.samples(model$model, 
+                                  variable.names = c("WAIC"),
+                                  n.iter = 5000, n.burnin = 1000, 
+                                  n.thin = 1, type = "mean")
+
+# Intercept model
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec,  K = length(unique(hostspec)), 
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 julian = dates)
+
+params <- c('a1', 'a2', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+
+model.host.inter <- jags(model.file = 'ectomod_HostIntercept.txt', 
+              data = datalist, n.chains = 3, 
+              parameters.to.save = params, inits = inits, 
+              n.burnin = 4000, n.iter = 7500, n.thin = 10)
+
+samples.host.inter <- jags.samples(model.host.inter$model, 
+                                  variable.names = c("WAIC"),
+                                  n.iter = 5000, n.burnin = 1000, 
+                                  n.thin = 1, type = "mean")
+
+# Host spec
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, host = hostspec, 
+                 K = length(unique(hostspec)), deadveg = comp.cov1, 
+                 grassforb = comp.cov2, julian = dates)
+
+params <- c('a1', 'a2', 'b1', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+
+model.host.spec <- jags(model.file = 'ectomodSpec.txt', 
+                         data = datalist, n.chains = 3, 
+                         parameters.to.save = params, inits = inits, 
+                         n.burnin = 4000, n.iter = 7500, n.thin = 10)
+
+samples.host.spec <- jags.samples(model.host.spec$model, 
+                                   variable.names = c("WAIC"),
+                                   n.iter = 5000, n.burnin = 1000, 
+                                   n.thin = 1, type = "mean")
+
+# Host mass
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2, julian = dates)
+
+params <- c('a1', 'a2', 'b2', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+
+model.host.mass <- jags(model.file = 'ectomodMass.txt', 
+                        data = datalist, n.chains = 3, 
+                        parameters.to.save = params, inits = inits, 
+                        n.burnin = 4000, n.iter = 7500, n.thin = 10)
+
+samples.host.mass <- jags.samples(model.host.mass$model, 
+                                  variable.names = c("WAIC"),
+                                  n.iter = 5000, n.burnin = 1000, 
+                                  n.thin = 1, type = "mean")
+
+# Host sex
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
+
+params <- c('a1', 'a2', 'b3', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+
+model.host.sex <- jags(model.file = 'ectomodSex.txt', 
+                        data = datalist, n.chains = 3, 
+                        parameters.to.save = params, inits = inits, 
+                        n.burnin = 4000, n.iter = 7500, n.thin = 10)
+
+samples.host.sex <- jags.samples(model.host.sex$model, 
+                                  variable.names = c("WAIC"),
+                                  n.iter = 5000, n.burnin = 1000, 
+                                  n.thin = 1, type = "mean")
+
+# Spec + mass
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, host = hostspec, 
+                 K = length(unique(hostspec)), 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2, julian = dates)
+
+params <- c('a1', 'a2', 'b1', 'b2', 'c1', 'c2', 'psi',
+            'theta', 'Z', 'Y')
+
+model.host.specmass <- jags(model.file = 'ectomodSpecMass.txt', 
+                       data = datalist, n.chains = 3, 
+                       parameters.to.save = params, inits = inits, 
+                       n.burnin = 4000, n.iter = 7500, n.thin = 10)
+
+samples.host.specmass <- jags.samples(model.host.specmass$model, 
+                                 variable.names = c("WAIC"),
+                                 n.iter = 5000, n.burnin = 1000, 
+                                 n.thin = 1, type = "mean")
+
+# Spec + sex
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
+
+params <- c('a1', 'a2', 'b1', 'b3', 'c1', 'c2', 'psi',
+            'theta', 'Z', 'Y')
+
+model.host.specsex <- jags(model.file = 'ectomodSpecSex.txt', 
+                            data = datalist, n.chains = 3, 
+                            parameters.to.save = params, 
+                            inits = inits, n.burnin = 4000, 
+                            n.iter = 7500, n.thin = 10)
+
+samples.host.specsex <- jags.samples(model.host.specsex$model, 
+                                      variable.names = c("WAIC"),
+                                      n.iter = 5000, n.burnin = 1000, 
+                                      n.thin = 1, type = "mean")
+
+# Mass + sex
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates)
+
+params <- c('a1', 'a2', 'b2', 'b3', 'c1', 'c2', 'psi',
+            'theta', 'Z', 'Y')
+
+model.host.sexmass <- jags(model.file = 'ectomodSexMass.txt', 
+                           data = datalist, n.chains = 3, 
+                           parameters.to.save = params, 
+                           inits = inits, n.burnin = 4000, 
+                           n.iter = 7500, n.thin = 10)
+
+samples.host.sexmass <- jags.samples(model.host.sexmass$model, 
+                                     variable.names = c("WAIC"),
+                                     n.iter = 5000, n.burnin = 1000, 
+                                     n.thin = 1, type = "mean")
+
+# Set up WAIC table
+WAIC.list <- list("SexMass" = samples.host.sexmass[[1]])
+
+# Compare
+waic.frame.host <- data.frame(model = names(WAIC.list), 
+                              WAIC = unlist(lapply(WAIC.list, sum)))
+
+# load existing WAIC table
+waic.table <- read.csv(file = "waic_host_1cap1ecto.csv")
+
+# combine with other WAICs and write table
+waic.frame.host <- rbind(waic.frame.host, waic.table)
+
+waic.frame.host <- arrange(waic.frame.host, WAIC)
+
+print(waic.frame.host)
+
+# write.csv(waic.frame.host, row.names = F,
+#           file = "waic_host_1cap1ecto.csv")
+
+# Run best models based on above ---------------------------
+
 
 # Covariate results ----------------------
 # Veg composition: forest or not
@@ -739,12 +1012,12 @@ a1s <- data.frame(mean = apply(a1, 2, mean),
   mutate(sig = NA) %>%
   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(a1s) <- colnames(site.occ)[-c(1,2,5)]
+rownames(a1s) <- colnames(site.occ)[-c(1)]
 
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_point(aes(x = rownames(a1s), y = 6, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 7, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
@@ -753,7 +1026,7 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegforest75cov.jpeg", width = 9, 
+# ggsave(filename = "vegforest.jpeg", width = 9,
 #        height = 4,units = "in")
 
 # Veg comp: grass or forb
@@ -764,7 +1037,7 @@ a2s <- data.frame(mean = apply(a2, 2, mean),
            hi = apply(a2, 2, quantile, 0.875)) %>%
       mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
                          TRUE ~ ""))
-rownames(a2s) <- colnames(site.occ)[-c(1,2,5)]
+rownames(a2s) <- colnames(site.occ)[-c(1)]
 
 ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
@@ -778,7 +1051,7 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
                                    hjust = 1.1),
         panel.grid = element_blank(), legend.position = "None")
 
-# ggsave(filename = "vegforb95cov.jpeg", width = 9, height = 4,
+# ggsave(filename = "vegforb_alldata.jpeg", width = 9, height = 4,
 #        units = "in")
 
 # Effect of host spec
@@ -786,21 +1059,21 @@ b1 <- model$BUGSoutput$sims.list$b1
 
 b1lo <- as.data.frame(apply(b1, c(2,3), quantile, 0.125))
 colnames(b1lo) <- levels(hostspec)
-b1lo$Ecto <- sort(unique(mecto.caps$Ecto))[-c(1,4)]
+b1lo$Ecto <- sort(unique(mecto.caps$Ecto))#[-c(1,4)]
 
 b1lo <- pivot_longer(b1lo, cols = -Ecto, 
                      names_to = "host", values_to = "lo")
 
 b1hi <- as.data.frame(apply(b1, c(2,3), quantile, 0.875))
 colnames(b1hi) <- levels(hostspec)
-b1hi$Ecto <- sort(unique(mecto.caps$Ecto))[-c(1,4)]
+b1hi$Ecto <- sort(unique(mecto.caps$Ecto))#[-c(1,4)]
 
 b1hi <- pivot_longer(b1hi, cols = -Ecto, 
                      names_to = "host", values_to = "hi")
 
 b1mean <- as.data.frame(apply(b1, c(2,3), mean))
 colnames(b1mean) <- levels(hostspec)
-b1mean$Ecto <- sort(unique(mecto.caps$Ecto))[-c(1,4)]
+b1mean$Ecto <- sort(unique(mecto.caps$Ecto))#[-c(1,4)]
 
 b1mean <- pivot_longer(b1mean, cols = -Ecto,
                        names_to = "host", values_to = "mean")
@@ -829,7 +1102,7 @@ for(i in 1:length(ecto.specs)){
 }
 
 # for(i in 1:length(plotlist)){
-#   ggsave(plotlist[[i]], filename = paste("95cihost", i, ".jpeg",
+#   ggsave(plotlist[[i]], filename = paste("host_alldat", i, ".jpeg",
 #                                          sep = ""),
 #          width = 5, height = 3, units = "in")
 # }
