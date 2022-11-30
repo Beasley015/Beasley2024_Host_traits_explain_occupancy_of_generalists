@@ -1306,13 +1306,14 @@ dunn_test(data = site.df[site.df$Classification != "Diptera",],
           formula = site.r2~Classification)
 
 # full fig
-ggplot(data = site.df, aes(x = Classification, y = site.r2))+
+siteR2fig <- ggplot(data = site.df, aes(x = Classification, 
+                                        y = site.r2))+
   geom_boxplot(fill = "lightgray", outlier.shape = NA)+
   geom_jitter(aes(color = Order))+
   scale_color_viridis_d(end = 0.95)+
   labs(y = bquote("Site"~R^2))+
   theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank(), legend.position = "none")
 
 # ggsave(filename = "siter2.jpeg", height = 4, width = 6,
 #        units = "in", dpi = 600)
@@ -1362,7 +1363,8 @@ dunn_test(data = host.df[host.df$Classification != "Diptera",],
           formula = host.r2~Classification)
 
 # Final fig
-ggplot(data = host.df, aes(x = Classification, y = host.r2))+
+hostR2fig <- ggplot(data = host.df, aes(x = Classification, 
+                                        y = host.r2))+
   geom_boxplot(fill = 'lightgray', outlier.shape = NA)+
   geom_jitter(aes(color = Order))+
   scale_color_viridis_d(end = 0.95)+
@@ -1372,6 +1374,12 @@ ggplot(data = host.df, aes(x = Classification, y = host.r2))+
 
 # ggsave(filename = "hostr2.jpeg", height = 4, width = 6,
 #        units = 'in', dpi = 600)
+
+r2fig <- siteR2fig + hostR2fig +
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "r2fig.jpeg", height = 3, width = 10, 
+#        units = 'in',dpi = 600)
 
 # R-squared vs. host specificity -------------------
 summary(lm(data = site.df, formula = hosts~site.r2))
