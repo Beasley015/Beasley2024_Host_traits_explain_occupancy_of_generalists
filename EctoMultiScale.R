@@ -404,7 +404,8 @@ comp.cov1 <- as.vector(scale(comp.cov1))
 comp.cov2 <- comp.pc$x[,2]
 comp.cov2 <- as.vector(scale(comp.cov2))
 
-comp.frame <- cbind(veg.site, pc1 = comp.cov, pc2 = comp.pc$x[,2])
+comp.frame <- cbind(veg.site, pc1 = comp.cov1, 
+                    pc2 = comp.cov2)
 
 p <- ggplot(data = comp.frame, aes(x = pc1, y = pc2, color = Habitat))+
   geom_point(size = 2)+
@@ -413,29 +414,29 @@ p <- ggplot(data = comp.frame, aes(x = pc1, y = pc2, color = Habitat))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())+
   annotation_custom(grob = textGrob(label = "Leaf Litter"), 
-                    ymin = -24, ymax = -24, xmin = 1.4, 
+                    ymin = -2.2, ymax = -2.2, xmin = 1.4, 
                     xmax = 1.4)+
   annotation_custom(grob = textGrob(label = "Grass/Forb"),
-                    ymin = -24, ymax = -24, xmin = -0.9,
+                    ymin = -2.2, ymax = -2.2, xmin = -0.9,
                     xmax = -0.9)+
   annotation_custom(grob = textGrob(label = "Grass",
                                     rot = 90),
-                    ymin = -17, ymax = -17, xmin = -1.7,
-                    xmax = -1.7)+
+                    ymin = -1.5, ymax = -1.6, xmin = -1.6,
+                    xmax = -1.5)+
   annotation_custom(grob = textGrob(label = "Forb", rot = 90),
-                    ymin = 19, ymax = 19, xmin = -1.7,
-                    xmax = -1.7)
+                    ymin = 1.5, ymax = 1.5, xmin = -1.6,
+                    xmax = -1.6)
 
 gt <- ggplot_gtable(ggplot_build(p))
 gt$layout$clip[gt$layout$name == "panel"] <- "off"
 grid.draw(gt)
 
-# ggsave(filename = "pc1.jpeg", width = 4, height = 4, units = "in")
+# ggsave(filename = "pc1.jpeg", width = 4, height = 4, units = "in",)
 
 # Site covariate: Veg complexity -----------------
 height.pc <- prcomp(veg.site[,4:9])
 
-height.cov <- height.pc$x[,2]
+height.cov <- height.pc$x[,1]
 
 height.cov <- as.vector(scale(height.cov))
 
@@ -478,46 +479,7 @@ ggplot(data = pcs, aes(x = CompPC, y = HeightPC, color = Habitat))+
   theme(panel.grid = element_blank())
 
 cor.test(x = pcs$HeightPC, y = pcs$CompPC)
-
-# Alt veg covariate: pca with everything ----------------
-veg.pc <- prcomp(veg.site[,4:15])
-
-veg1 <- veg.pc$x[,1]
-
-veg1 <- as.vector(scale(veg1))
-
-veg2 <- veg.pc$x[,2]
-
-veg2 <- as.vector(scale(veg2))
-
-veg.frame <- cbind(veg.site, pc1 = veg1, 
-                      pc2 = veg2)
-
-p <- ggplot(data = veg.frame, aes(x = pc1, y = pc2, 
-                                     color = Habitat))+
-  geom_point(size = 2)+
-  scale_color_viridis_d(end = 0.95)+
-  labs(x = "PC1", y = "PC2")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())+
-  annotation_custom(grob = textGrob(label = "Grass",
-                                    rot = 90),
-                    ymin = -17, ymax = -17, xmin = -70,
-                    xmax = -70)+
-  annotation_custom(grob = textGrob(label = "Forb", rot = 90),
-                    ymin = 19, ymax = 19, xmin = -70,
-                    xmax = -70)+
-  annotation_custom(grob = textGrob(label = "Dead Veg"),
-                    ymin = -25, ymax = -25, xmin = 50, xmax = 50)+
-  annotation_custom(grob = textGrob(label = "Grass/Forb"),
-                    ymin = -25, ymax = -25, xmin = -45, xmax = -45)
-
-gt <- ggplot_gtable(ggplot_build(p))
-gt$layout$clip[gt$layout$name == "panel"] <- "off"
-grid.draw(gt)
-
-# ggsave(gt, filename = "vegpc.jpeg", width = 4.5, height = 4.5,
-#        units = "in")
+# Veg cover and complexity highly correlated- use cover only
 
 # Host covariate: Species -----------------------
 # Get species abbrev of each host
@@ -1386,7 +1348,7 @@ summary(lm(data = site.df, formula = hosts~site.r2))
 summary(lm(data = host.df, formula = hosts~host.r2))
 # This is wild
 
-ggplot(data = site.df, aes(x = site.r2, y = hosts))+
+r2site <- ggplot(data = site.df, aes(x = site.r2, y = hosts))+
   geom_point(aes(color = Classification), size = 2)+
   # geom_smooth(se = F, method = 'lm', color = "black")+
   scale_color_viridis_d(end = 0.95)+
@@ -1399,7 +1361,7 @@ ggplot(data = site.df, aes(x = site.r2, y = hosts))+
 # ggsave("siter2hostsub.jpeg", height =3, width = 5, units = "in")
 # ggsave("siter2hostfam.jpeg", height =3, width = 5, units = "in")
 
-ggplot(data = host.df, aes(x = host.r2, y = hosts))+
+r2host <- ggplot(data = host.df, aes(x = host.r2, y = hosts))+
   geom_point(aes(color = Classification), size = 2)+
   geom_smooth(se = F, method = 'lm', color = "black")+
   scale_color_viridis_d(end = 0.95)+
@@ -1411,6 +1373,13 @@ ggplot(data = host.df, aes(x = host.r2, y = hosts))+
 #        units = "in")
 # ggsave("hostr2hostsub.jpeg", height = 3, width = 5, units = "in")
 # ggsave("hostr2hostfam.jpeg", height = 3, width = 5, units = "in")
+
+r2site + r2host +
+  plot_layout(guides = "collect")+
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "r2nhost.jpeg", width = 10, height = 3, 
+#        units = "in", dpi = 600)
 
 # Hosts per classification ------------------
 # Stat test
