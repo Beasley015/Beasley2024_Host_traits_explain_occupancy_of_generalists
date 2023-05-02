@@ -151,8 +151,8 @@ ggplot(data = mamm.prev, aes(x = SpecName, y = Prevalence))+
         axis.text.x = element_text(angle = 45, vjust = 1,
                                    hjust = 1))
 
-ggsave(filename = "MammPrev.jpeg", width = 4, height = 3, 
-       units = "in")
+# ggsave(filename = "MammPrev.jpeg", width = 4, height = 3, 
+#        units = "in")
 
 # Avg. load per capture event per species
 mamm.load <- mamm.ecto %>%
@@ -345,11 +345,14 @@ mecto.full <- mecto.joined %>%
 # Expand trap days
 mecto.days <- mecto.full %>%
   group_by(Tag) %>%
-  pivot_wider(names_from = Day, values_from = Occ, values_fn = sum) %>%
-  select(Tag, Site, Ecto, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`) %>%
-  mutate_at(.vars = '4':'12', .funs = function(x) case_when(x > 1 ~ 1,
-                                                            x == 1 ~ 1,
-                                                          x == 0 ~ 0)) %>%
+  pivot_wider(names_from = Day, values_from = Occ, 
+              values_fn = sum) %>%
+  select(Tag, Site, Ecto, `1`, `2`, `3`, `4`, `5`, `6`, 
+         `7`, `8`, `9`) %>%
+  mutate_at(.vars = '4':'12', 
+            .funs = function(x) case_when(x > 1 ~ 1,
+                                          x == 1 ~ 1,
+                                          x == 0 ~ 0)) %>%
   ungroup() %>%
   filter(!is.na(Ecto))
 
@@ -409,7 +412,6 @@ veg.site <- veg.2020 %>%
   summarise(across(.cols = c(Canopy:X.DeadVeg), mean, na.rm = T))
 
 comp.pc <- prcomp(veg.site[,10:15])
-# pc.all <- prcomp(veg.site[,3:15])
 
 comp.cov1 <- comp.pc$x[,1]
 comp.cov1 <- as.vector(scale(comp.cov1))
@@ -445,54 +447,6 @@ gt$layout$clip[gt$layout$name == "panel"] <- "off"
 grid.draw(gt)
 
 ggsave(gt, filename = "pc1.jpeg", width = 4.5, height = 3.5, units = "in")
-
-# Site covariate: Veg complexity -----------------
-height.pc <- prcomp(veg.site[,4:9])
-
-height.cov <- height.pc$x[,1]
-
-height.cov <- as.vector(scale(height.cov))
-
-height.frame <- cbind(veg.site, pc1 = height.cov, 
-                      pc2 = height.pc$x[,2])
-
-p <- ggplot(data = height.frame, aes(x = pc1, y = pc2, 
-                                     color = Habitat))+
-  geom_point(size = 2)+
-  scale_color_viridis_d(end = 0.95)+
-  labs(x = "PC1 (Decreasing Complexity)", y = "PC2")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())+
-  annotation_custom(grob = textGrob(label = "10 cm tall",
-                                    rot = 90),
-                    ymin = -0.5, ymax = -0.5, xmin = -2.35,
-                    xmax = -2.35)+
-  annotation_custom(grob = textGrob(label = "30 cm tall", rot = 90),
-                    ymin = 0.4, ymax = 0.4, xmin = -2.35,
-                    xmax = -2.35)
-
-gt <- ggplot_gtable(ggplot_build(p))
-gt$layout$clip[gt$layout$name == "panel"] <- "off"
-grid.draw(gt)
-
-# ggsave(filename = "pc2.jpeg", width = 4, height = 4, 
-#        units = "in")
-
-# Both pc's ---------------------
-pcs <- data.frame(Site = height.frame$Site, 
-                  Habitat = height.frame$Habitat,
-                  CompPC = comp.frame$pc1, 
-                  HeightPC = height.frame$pc1)
-
-ggplot(data = pcs, aes(x = CompPC, y = HeightPC, color = Habitat))+
-  geom_point(size = 2)+
-  labs(x = "Composition PC", y = "Vertical Structure PC")+
-  scale_color_viridis_d(end = 0.95)+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-cor.test(x = pcs$HeightPC, y = pcs$CompPC)
-# Veg cover and complexity highly correlated- use cover only
 
 # Host covariate: Species -----------------------
 # Get species abbrev of each host
@@ -1661,7 +1615,6 @@ deadveg / grassforb &
 # merge ectos and smamms
 a1s$Parasite <- rownames(a1s)
 ecto.prefs <- read.csv(file = "HostPrefs_raw.csv")
-# ecto.prefs <- read.csv(file = "HostPrefs_Adj.csv")
 
 cov.resps <- full_join(mamm.plt1, ecto.prefs, 
           by = c("MammSpec" = "PrefMammal")) %>%
@@ -1676,8 +1629,7 @@ cov.resps <- full_join(mamm.plt1, ecto.prefs,
 
 # Test host/parasite coef associations
 summary(lm(data = cov.resps, mean~meana1))
-t.test(data = cov.resps, mean~Habitat) #if using non-adj
-# dunn_test(data = cov.resps, mean~Habitat) # if using adj
+t.test(data = cov.resps, mean~Habitat) 
 ggplot(data = cov.resps, aes(x = Habitat, y = mean))+
   geom_boxplot(fill = "lightgray")+
   # geom_point()+
@@ -1686,7 +1638,7 @@ ggplot(data = cov.resps, aes(x = Habitat, y = mean))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "hostcoefbox_adj.jpeg", width = 5, height = 3,
+# ggsave(filename = "hostcoefbox.jpeg", width = 5, height = 3,
 #        units = "in")
 
 # Do it with primary hosts only
