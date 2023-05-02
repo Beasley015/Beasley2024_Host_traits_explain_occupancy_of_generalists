@@ -48,7 +48,8 @@ mamm.2020 <- mamm.raw %>%
 # Ectos 
 ecto.clean <- ecto.raw %>%
   filter(Other != "Springtail?") %>%
-  .[!(.$Order == "Ixodida" & .$Species == ""),]
+  .[!(.$Order == "Ixodida" & .$Species == ""),] #%>%
+  # rename(Ecto.genus = Genus)
 
 # Veg
 veg.2020 <- veg.raw %>%
@@ -79,21 +80,25 @@ length(unique(mamm.ecto$Abbrev))
 # Individuals per mammal species
 mamm.abund <- mamm.2020 %>%
   distinct_at(.vars = vars(Site, Abbrev, Tag), .keep_all = T) %>%
-  group_by(Abbrev) %>%
+  mutate(Genus = paste(substr(Genus, start = 1, stop = 1), ".")) %>%
+  unite(col = SpecName, Genus, Species, sep = " ") %>%
+  group_by(SpecName) %>%
   summarise(Count = n()) 
 
 # Create rank-abundance figure
-mamm.abund$Abbrev <- reorder(mamm.abund$Abbrev, -mamm.abund$Count)
+mamm.abund$SpecName <- reorder(mamm.abund$SpecName, -mamm.abund$Count)
 
-ggplot(data = mamm.abund, aes(x = Abbrev, y = Count))+
+ggplot(data = mamm.abund, aes(x = SpecName, y = Count))+
   geom_col(fill = "light gray", color = "black")+
   scale_y_continuous(expand = c(0,0), 
                      limits = c(0, max(mamm.abund$Count+10)))+
   labs(x = "Species", y = "Abundance")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
+  theme_bw(base_size = 12)+
+  theme(panel.grid = element_blank(), 
+        axis.text.x = element_text(angle = 45, vjust = 1,
+                                   hjust = 1))
 
-# ggsave("MammAbund.jpeg")
+# ggsave("MammAbund.jpeg", width = 4, height = 3, units = "in")
 
 # Parasite summary and tables/figures -----------------------
 # Number of ectoparasite orders
@@ -128,25 +133,32 @@ ggplot(data = ecto.abund, aes(x = Order, y = Count))+
 
 # Prevalence by host species
 mamm.prev <- mamm.ecto %>%
-  group_by(Abbrev) %>%
+  mutate(Genus = paste(substr(Genus, start = 1, stop = 1), ".")) %>%
+  unite(col = SpecName, Genus, Species.x, sep = " ") %>%
+  group_by(SpecName) %>%
   summarise(Prevalence = 
               length(Order[Order != "" & is.na(Order) == F])/
               length(Order)) 
 
-mamm.prev$Abbrev <- reorder(mamm.prev$Abbrev, 
+mamm.prev$SpecName <- reorder(mamm.prev$SpecName, 
                             -mamm.prev$Prevalence)
 
-ggplot(data = mamm.prev, aes(x = Abbrev, y = Prevalence))+
+ggplot(data = mamm.prev, aes(x = SpecName, y = Prevalence))+
   geom_col(color = "black", fill = "lightgray")+
   labs(x = "Species")+
   theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank(), 
+        axis.text.x = element_text(angle = 45, vjust = 1,
+                                   hjust = 1))
 
-# ggsave(filename = "MammPrev.jpeg")
+ggsave(filename = "MammPrev.jpeg", width = 4, height = 3, 
+       units = "in")
 
 # Avg. load per capture event per species
 mamm.load <- mamm.ecto %>%
-  group_by(Abbrev, SampleNo.) %>%
+  mutate(Genus = paste(substr(Genus, start = 1, stop = 1), ".")) %>%
+  unite(col = SpecName, Genus, Species.x, sep = " ") %>%
+  group_by(SpecName, SampleNo.) %>%
   filter(SampleNo. != "") %>%
   summarise(ecto = n())
 
@@ -158,7 +170,7 @@ ggplot(data = mamm.load, aes(x = ecto))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave("EctoLoad.jpeg")
+# ggsave("EctoLoad.jpeg", width = 4, height = 3, units = "in")
 
 # Raster of parasite specs present on host specs
 mamm.raster <- mamm.ecto %>%
@@ -397,6 +409,7 @@ veg.site <- veg.2020 %>%
   summarise(across(.cols = c(Canopy:X.DeadVeg), mean, na.rm = T))
 
 comp.pc <- prcomp(veg.site[,10:15])
+# pc.all <- prcomp(veg.site[,3:15])
 
 comp.cov1 <- comp.pc$x[,1]
 comp.cov1 <- as.vector(scale(comp.cov1))
@@ -411,7 +424,7 @@ p <- ggplot(data = comp.frame, aes(x = pc1, y = pc2, color = Habitat))+
   geom_point(size = 2)+
   scale_color_viridis_d(end = 0.95)+
   labs(x = "PC1", y = "PC2")+
-  theme_bw(base_size = 14)+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())+
   annotation_custom(grob = textGrob(label = "Leaf Litter"), 
                     ymin = -2.2, ymax = -2.2, xmin = 1.4, 
@@ -431,7 +444,7 @@ gt <- ggplot_gtable(ggplot_build(p))
 gt$layout$clip[gt$layout$name == "panel"] <- "off"
 grid.draw(gt)
 
-# ggsave(filename = "pc1.jpeg", width = 4, height = 4, units = "in",)
+ggsave(gt, filename = "pc1.jpeg", width = 4.5, height = 3.5, units = "in")
 
 # Site covariate: Veg complexity -----------------
 height.pc <- prcomp(veg.site[,4:9])
@@ -1423,21 +1436,41 @@ ecto.host.abund <- mamm.ecto %>%
   group_by(Abbrev, Ecto) %>%
   summarise(spec_abund = n())
 
+ecto.host.abund %>%
+  group_by(Ecto) %>%
+  summarise(abund = sum(spec_abund)) %>%
+  arrange(desc(abund))
+
 # Make figs for raw abundances
+abundplts <- list()
 for(i in 1:length(unique(ecto.host.abund$Ecto))){
   sub <- ecto.host.abund[ecto.host.abund$Ecto == unique(ecto.host.abund$Ecto)[i],]
   
-  plt <- ggplot(data = sub, 
+  abundplts[[i]] <- ggplot(data = sub, 
                 aes(x = fct_reorder(Abbrev, desc(spec_abund)), 
                          y = spec_abund))+
-    geom_col()+
-    labs(x = "Hosts", y = "Abundance", 
-         title = unique(ecto.host.abund$Ecto)[i])+
+    geom_col(width = 0.7)+
+    labs(x = "Hosts", y = "Abundance")+#, 
+        # title = unique(ecto.host.abund$Ecto)[i])+
     theme_bw()+
     theme(panel.grid = element_blank())
-  
-  print(plt)
 }  
+
+# Example figures
+abundplts[[8]]+abundplts[[15]] +
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "samplepreffig.jpeg", width = 6, height = 2.5,
+#        units = "in")
+
+# Host generalists: pseudagyrtes, 2 ixodes, quirini, o leucopus
+(abundplts[[3]]+abundplts[[5]])/
+  (abundplts[[6]]+abundplts[[8]])/
+  (abundplts[[9]]+plot_spacer())&
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "generalists.jpeg", width = 6, height = 5, 
+#        units = "in")
 
 # Get host relative abundances
 ecto.host.rel <- mamm.clean %>%
@@ -1450,19 +1483,18 @@ ecto.host.rel <- mamm.clean %>%
   right_join(y = ecto.host.abund, by = "Abbrev") %>%
   mutate(rel_spec_abund = (1-RelAbund)*spec_abund)
 
+relplots <- list()
 for(i in 1:length(unique(ecto.host.rel$Ecto))){
   sub <- ecto.host.rel[ecto.host.rel$Ecto == unique(ecto.host.rel$Ecto)[i],]
   
-  plt <- ggplot(data = sub, 
+  relplots[[i]] <- ggplot(data = sub, 
                 aes(x = fct_reorder(Abbrev, desc(rel_spec_abund)), 
                     y = rel_spec_abund))+
-    geom_col()+
-    labs(x = "Hosts", y = "Relative Abundance", 
-         title = unique(ecto.host.rel$Ecto)[i])+
+    geom_col(width = 0.8)+
+    labs(x = "Host Species", y = "Relative Abundance")+#, 
+         #title = unique(ecto.host.rel$Ecto)[i])+
     theme_bw()+
     theme(panel.grid = element_blank())
-  
-  print(plt)
 }
 
 # Host occupancy model -------------------------
@@ -1590,13 +1622,15 @@ mamm.plt1 <- mamma1 %>%
   summarise(meana1 = mean(Output), lo = quantile(Output, 0.125),
             hi = quantile(Output, 0.875))
 
-ggplot(data = mamm.plt1, aes(x = MammSpec, y = meana1))+
+deadveg <- ggplot(data = mamm.plt1, aes(x = MammSpec, y = meana1))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  labs(x = "Host Species", y = "Dead Vegetation Coefficient")+
-  theme_bw(base_size = 14)+
+  labs(x = "Host Species", y = "Coefficient")+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
+
+# ggsave("mammcoef.jpeg", width = 6, height = 3, units = "in")
 
 # get grass/forb coef
 mamma2 <- as.data.frame(smamms$BUGSoutput$sims.list$a2)
@@ -1609,14 +1643,20 @@ mamm.plt2 <- mamma2 %>%
   summarise(meana2 = mean(Output), lo = quantile(Output, 0.125),
             hi = quantile(Output, 0.875))
 
-ggplot(data = mamm.plt2, aes(x = MammSpec, y = meana2))+
+grassforb <- ggplot(data = mamm.plt2, aes(x = MammSpec, y = meana2))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  labs(x = "Host Species", y = "Grass/Forb Coefficient")+
-  theme_bw(base_size = 14)+
+  labs(x = "Host Species", y = "Coefficient")+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 # mamms mostly differ in forest vs not preferences
+
+deadveg / grassforb &
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "mamm_prefs.jpeg", width = 6, height = 4,
+#        units = "in")
 
 # merge ectos and smamms
 a1s$Parasite <- rownames(a1s)
@@ -1636,8 +1676,8 @@ cov.resps <- full_join(mamm.plt1, ecto.prefs,
 
 # Test host/parasite coef associations
 summary(lm(data = cov.resps, mean~meana1))
-kruskal.test(data = cov.resps, mean~Habitat)
-dunn_test(data = cov.resps, mean~Habitat)
+t.test(data = cov.resps, mean~Habitat) #if using non-adj
+# dunn_test(data = cov.resps, mean~Habitat) # if using adj
 ggplot(data = cov.resps, aes(x = Habitat, y = mean))+
   geom_boxplot(fill = "lightgray")+
   # geom_point()+
@@ -1650,21 +1690,24 @@ ggplot(data = cov.resps, aes(x = Habitat, y = mean))+
 #        units = "in")
 
 # Do it with primary hosts only
-summary(lm(data = cov.resps[cov.resps$Secondary != "Secondary_host",], mean~meana1))
-t.test(data = cov.resps[cov.resps$Secondary != "Secondary_host",], mean~Habitat)
+summary(lm(data = cov.resps[cov.resps$Secondary != "Secondary_host",],
+           mean~meana1))
+t.test(data = cov.resps[cov.resps$Secondary 
+                             != "Secondary_host",],
+       mean~Habitat, paired = F)
 cohens_d(data = cov.resps[cov.resps$Secondary != "Secondary_host",],
-          mean~Habitat)
+          formula = mean~Habitat)
 
 ggplot(data = cov.resps[cov.resps$Secondary != "Secondary_host",], 
-       aes(x = meana1, y = mean))+
-  # geom_boxplot(fill = "lightgray")+
-  geom_point()+
-  # geom_smooth(method = 'lm', se = F, color = 'black')+
-  labs(x = "Host Coefficient", y = "Parasite Coefficient")+
+       aes(x = Habitat, y = mean))+
+  geom_boxplot(fill = "lightgray")+
+  # geom_jitter(aes(color = Classification))+
+  scale_color_viridis_d()+
+  labs(x = "Host Habitat", y = "Parasite Coefficient")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "hostcoefregress_prim_raw.jpeg", width = 5,
+# ggsave(filename = "hostcoef_prim_raw.jpeg", width = 5,
 #        height = 3, units = "in")
 
 # Getting P. leucopus ectos ---------------------
