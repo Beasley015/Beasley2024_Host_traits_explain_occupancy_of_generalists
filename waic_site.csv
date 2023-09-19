@@ -1,0 +1,16 @@
+"model","WAIC"
+"DeadVeg + GrassForb + HostDiversity",81.89546771
+"HostDiversity",82.21862971
+"DeadVeg + HostDiversity",82.54372504
+"DeadVeg + GrassForb + HostAbundance",82.85163207
+"DeadVeg + GrassForb",82.86470883
+"Full",83.84471121
+"DeadVeg + HostAbundance",84.00307694
+"GrassForb + HostAbundance + HostDiversity",84.0699444479986
+"HostAbundance",84.36124699
+"DeadVeg",84.72052354
+"GrassForb + HostAbundance",84.81909616
+"GrassForb",84.89454211
+"Intercept",85.05715429
+"HostAbundance + HostDiversity",85.25562603
+"GrassForb + HostDiversity",87.13294021
