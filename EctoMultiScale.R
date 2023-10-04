@@ -16,9 +16,13 @@ library(R2jags)
 library(multiApply)
 library(agricolae)
 library(gridExtra)
+library(pscl)
+library(spData)
 library(grid)
 library(rstatix)
 library(patchwork)
+library(sf)
+library(terra)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -661,7 +665,7 @@ datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  div = div.vec)
 
 params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'c1', 'c2',
-            'psi', 'theta', 'b4')
+            'psi', 'theta', 'b4', 'Y', 'Z')
 
 # Init values
 inits <- function(){
@@ -689,7 +693,8 @@ inits <- function(){
 # model <- readRDS("sansrarehost.rds")
 # model <- readRDS("iscap_agg.rds")
 # model <- readRDS("mite_agg.rds")
-model <- readRDS("interaction_term.rds")
+# model <- readRDS("interaction_term.rds")
+model <- readRDS("sansabund.rds")
 
 # Model selection: site ------------------------
 # Full model
@@ -1001,8 +1006,10 @@ params <- c('a1', 'a2', 'a4', 'b1', 'b2', 'b3', 'c1', 'c2',
 model.site.v1v2d <- jags(model.file = 'ectomod_V1V2D.txt',
                          data = datalist, n.chains = 3, 
                          parameters.to.save = params,
-                         inits = inits, n.burnin = 9000, 
-                         n.iter = 20000, n.thin = 10)
+                         inits = inits, n.burnin = 15000, 
+                         n.iter = 30000, n.thin = 20)
+
+# saveRDS(model.site.v1v2d, file="sansabund.rds")
 
 samples.site.v1v2d <- jags.samples(model.site.v1v2d$model, 
                                    variable.names = c("WAIC"),
@@ -1094,10 +1101,13 @@ samples.host.full <- jags.samples(model$model,
 # Intercept model
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat,
-                 hostvec = hostvec, deadveg = comp.cov1, 
-                 grassforb = comp.cov2, julian = dates)
+                 hostvec = hostvec, K = length(unique(hostspec)),
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+params <- c('a1', 'a2','a3', 'a4', 'c1', 'c2', 'psi', 'theta', 
+            'Z', 'Y')
 
 model.host.inter <- jags(model.file = 'ectomod_HostIntercept.txt', 
               data = datalist, n.chains = 3, 
@@ -1112,11 +1122,14 @@ samples.host.inter <- jags.samples(model.host.inter$model,
 # Host spec
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat,
-                 hostvec = hostvec, host = hostspec, 
-                 K = length(unique(hostspec)), deadveg = comp.cov1, 
-                 grassforb = comp.cov2, julian = dates)
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)),
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'b1', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'c1', 'c2',
+            'psi', 'theta')
 
 model.host.spec <- jags(model.file = 'ectomod_Spec.txt', 
                          data = datalist, n.chains = 3, 
@@ -1133,11 +1146,14 @@ datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat,
                  hostvec = hostvec, 
                  mass = hostmass, deadveg = comp.cov1, 
-                 grassforb = comp.cov2, julian = dates)
+                 grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'b2', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+params <- c('a1', 'a2', 'a3', 'a4', 'b2', 'c1', 'c2',
+            'psi', 'theta')
 
-model.host.mass <- jags(model.file = 'ectomodMass.txt', 
+model.host.mass <- jags(model.file = 'ectomod_Mass.txt', 
                         data = datalist, n.chains = 3, 
                         parameters.to.save = params, inits = inits, 
                         n.burnin = 9000, n.iter = 20000, n.thin = 10)
@@ -1153,11 +1169,13 @@ datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  hostvec = hostvec, deadveg = comp.cov1, 
                  grassforb = comp.cov2,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
-                 julian = dates)
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'b3', 'c1', 'c2', 'psi', 'theta', 'Z', 'Y')
+params <- c('a1', 'a2', 'a3', 'a4', 'b3', 'c1', 'c2',
+            'psi', 'theta')
 
-model.host.sex <- jags(model.file = 'ectomodSex.txt', 
+model.host.sex <- jags(model.file = 'ectomod_Sex.txt', 
                         data = datalist, n.chains = 3, 
                         parameters.to.save = params, inits = inits, 
                         n.burnin = 9000, n.iter = 20000, n.thin = 10)
@@ -1168,19 +1186,41 @@ samples.host.sex <- jags.samples(model.host.sex$model,
                                   n.thin = 1, type = "mean")
 
 # Interaction term
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)),
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.inter <- jags(model.file = 'ectomod_Interaction.txt', 
+                       data = datalist, n.chains = 3, 
+                       parameters.to.save = params, inits = inits, 
+                       n.burnin = 9000, n.iter = 20000, n.thin = 10)
+
+samples.host.inter <- jags.samples(model.host.inter$model, 
+                                 variable.names = c("WAIC"),
+                                 n.iter = 5000, n.burnin = 1000, 
+                                 n.thin = 1, type = "mean")
 
 # Spec + mass
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat,
-                 hostvec = hostvec, host = hostspec, 
-                 K = length(unique(hostspec)), 
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
                  mass = hostmass, deadveg = comp.cov1, 
-                 grassforb = comp.cov2, julian = dates)
+                 grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'b1', 'b2', 'c1', 'c2', 'psi',
-            'theta', 'Z', 'Y')
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'c1', 'c2',
+            'psi', 'theta')
 
-model.host.specmass <- jags(model.file = 'ectomodSpecMass.txt', 
+model.host.specmass <- jags(model.file = 'ectomod_SpecMass.txt', 
                        data = datalist, n.chains = 3, 
                        parameters.to.save = params, inits = inits, 
                        n.burnin = 9000, n.iter = 20000, n.thin = 10)
@@ -1194,15 +1234,16 @@ samples.host.specmass <- jags.samples(model.host.specmass$model,
 datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  obs = ecto.ar, tagmat = tagmat,
                  hostvec = hostvec, 
-                 host = hostspec, K = length(unique(hostspec)), 
+                 host = hostspec, K = length(unique(hostspec)),
                  deadveg = comp.cov1, grassforb = comp.cov2,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
-                 julian = dates)
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'b1', 'b3', 'c1', 'c2', 'psi',
-            'theta', 'Z', 'Y')
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'b3', 'c1', 'c2',
+            'psi', 'theta')
 
-model.host.specsex <- jags(model.file = 'ectomodSpecSex.txt', 
+model.host.specsex <- jags(model.file = 'ectomod_SpecSex.txt', 
                             data = datalist, n.chains = 3, 
                             parameters.to.save = params, 
                             inits = inits, n.burnin = 9000, 
@@ -1220,12 +1261,13 @@ datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
                  mass = hostmass, deadveg = comp.cov1, 
                  grassforb = comp.cov2,
                  sex = matrix(rep(hostsex, necto), ncol = necto),
-                 julian = dates)
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
 
-params <- c('a1', 'a2', 'b2', 'b3', 'c1', 'c2', 'psi',
-            'theta', 'Z', 'Y')
+params <- c('a1', 'a2', 'a3', 'a4', 'b2', 'b3', 'c1', 'c2',
+            'psi', 'theta')
 
-model.host.sexmass <- jags(model.file = 'ectomodSexMass.txt', 
+model.host.sexmass <- jags(model.file = 'ectomod_SexMass.txt', 
                            data = datalist, n.chains = 3, 
                            parameters.to.save = params, 
                            inits = inits, n.burnin = 9000, 
@@ -1237,13 +1279,183 @@ samples.host.sexmass <- jags.samples(model.host.sexmass$model,
                                      n.thin = 1, type = "mean")
 
 # Mass + Interaction
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b2', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.massinter <- jags(model.file = 'ectomod_MassInter.txt', 
+                           data = datalist, n.chains = 3, 
+                           parameters.to.save = params, 
+                           inits = inits, n.burnin = 9000, 
+                           n.iter = 20000, n.thin = 10)
+
+samples.host.massinter <- jags.samples(model.host.massinter$model, 
+                                     variable.names = c("WAIC"),
+                                     n.iter = 5000, n.burnin = 1000, 
+                                     n.thin = 1, type = "mean")
 
 # Sex + Interaction
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)),
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b3', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.sexinter <- jags(model.file = 'ectomod_SexInter.txt', 
+                             data = datalist, n.chains = 3, 
+                             parameters.to.save = params, 
+                             inits = inits, n.burnin = 9000, 
+                             n.iter = 20000, n.thin = 10)
+
+samples.host.sexinter <- jags.samples(model.host.sexinter$model, 
+                                       variable.names = c("WAIC"),
+                                       n.iter = 5000, 
+                                       n.burnin = 1000, n.thin = 1,
+                                      type = "mean")
+
+# Spec + Interaction
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)),
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.specinter <- jags(model.file = 'ectomod_SpecInter.txt', 
+                            data = datalist, n.chains = 3, 
+                            parameters.to.save = params, 
+                            inits = inits, n.burnin = 9000, 
+                            n.iter = 20000, n.thin = 10)
+
+samples.host.specinter <- jags.samples(model.host.specinter$model, 
+                                      variable.names = c("WAIC"),
+                                      n.iter = 5000, 
+                                      n.burnin = 1000, n.thin = 1,
+                                      type = "mean")
 
 # Mass + Sex + Interaction
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b2', 'b3', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.msi <- jags(model.file = 'ectomod_MSI.txt', 
+                             data = datalist, n.chains = 3, 
+                             parameters.to.save = params, 
+                             inits = inits, n.burnin = 9000, 
+                             n.iter = 20000, n.thin = 10)
+
+samples.host.msi <- jags.samples(model.host.msi$model, 
+                                       variable.names = c("WAIC"),
+                                       n.iter = 5000, 
+                                       n.burnin = 1000, n.thin = 1,
+                                       type = "mean")
+
+# Spec + Mass + Interaction
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.SpMI <- jags(model.file = 'ectomod_SpMI.txt', 
+                       data = datalist, n.chains = 3, 
+                       parameters.to.save = params, 
+                       inits = inits, n.burnin = 9000, 
+                       n.iter = 20000, n.thin = 10)
+
+samples.host.SpMI <- jags.samples(model.host.SpMI$model, 
+                                 variable.names = c("WAIC"),
+                                 n.iter = 5000, 
+                                 n.burnin = 1000, n.thin = 1,
+                                 type = "mean")
+
+# Spec + Sex + Interaction
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)),
+                 deadveg = comp.cov1, grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'b3', 'c1', 'c2',
+            'psi', 'theta', 'b4')
+
+model.host.SpSI <- jags(model.file = 'ectomod_SpSI.txt', 
+                        data = datalist, n.chains = 3, 
+                        parameters.to.save = params, 
+                        inits = inits, n.burnin = 9000, 
+                        n.iter = 20000, n.thin = 10)
+
+samples.host.SpSI <- jags.samples(model.host.SpSI$model, 
+                                  variable.names = c("WAIC"),
+                                  n.iter = 5000, 
+                                  n.burnin = 1000, n.thin = 1,
+                                  type = "mean")
+
+# Spec + Mass + Sex
+datalist <- list(necto = necto, nsite = nsite, ncap = ncap,
+                 obs = ecto.ar, tagmat = tagmat,
+                 hostvec = hostvec, 
+                 host = hostspec, K = length(unique(hostspec)), 
+                 mass = hostmass, deadveg = comp.cov1, 
+                 grassforb = comp.cov2,
+                 sex = matrix(rep(hostsex, necto), ncol = necto),
+                 julian = dates, abund = abund.vec,
+                 div = div.vec)
+
+params <- c('a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'c1', 'c2',
+            'psi', 'theta')
+
+model.host.SpMS <- jags(model.file = 'ectomod_SpMS.txt', 
+                        data = datalist, n.chains = 3, 
+                        parameters.to.save = params, 
+                        inits = inits, n.burnin = 9000, 
+                        n.iter = 20000, n.thin = 10)
+
+samples.host.SpMS <- jags.samples(model.host.SpMS$model, 
+                                  variable.names = c("WAIC"),
+                                  n.iter = 5000, 
+                                  n.burnin = 1000, n.thin = 1,
+                                  type = "mean")
 
 # Set up WAIC table
-WAIC.list <- list("Species" = samples.host.spec[[1]])
+WAIC.list <- list("Species + Mass + Sex" = 
+                    samples.host.SpMS[[1]])
 
 # Compare
 waic.frame.host <- data.frame(model = names(WAIC.list), 
@@ -1284,9 +1496,10 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "vegforest_75_interac.jpeg", width = 9,
+# ggsave(filename = "vegforest_75_sansabund.jpeg", width = 10,
 #        height = 4,units = "in")
 
 # Veg comp: grass or forb
@@ -1303,16 +1516,17 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 4, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 4.4, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "vegforb_75_interac.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "vegforb_75_sansabund.jpeg", width = 10, 
+#        height = 4, units = "in")
 
 # Host abundance
 a3 <- model$BUGSoutput$sims.list$a3
@@ -1353,16 +1567,17 @@ ggplot(data = a4s, aes(x = rownames(a4s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 10, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 7.5, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
-  labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
+  labs(x = "Ectoparasite Species", y = "Host Diversity")+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "diversity_75_interac.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "diversity_75_sansabund.jpeg", width = 9, 
+#        height = 4, units = "in")
 
 # Effect of host spec
 b1 <- model$BUGSoutput$sims.list$b1
@@ -1391,10 +1606,10 @@ b1mean <- pivot_longer(b1mean, cols = -Ecto,
 hilo <- inner_join(b1hi, b1lo, by = c("host", "Ecto"))
 hilo$mean <- b1mean$mean
 
-hilo[which(hilo$lo > 0 | hilo$hi < 0),]
+hilo.host <- hilo[which(hilo$lo > 0 | hilo$hi < 0),]
 
 # Make interval plot for each ectoparasite species:
-ecto.specs <- unique(hilo$Ecto)
+ecto.specs <- unique(hilo.host$Ecto)
 
 plotlist <- list()
 for(i in 1:length(ecto.specs)){
@@ -1439,10 +1654,11 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "hostmass_75_interac.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "hostmass_75_sansabund.jpeg", width = 9, 
+#        height = 4, units = "in")
 
 # host sex
 b3 <- model$BUGSoutput$sims.list$b3
@@ -1466,10 +1682,11 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "hostsex_75_interac.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "hostsex_75_sansabund.jpeg", width = 10, 
+#        height = 4, units = "in")
 
 # Host/habitat interaction term
 b4 <- model$BUGSoutput$sims.list$b4
@@ -1507,7 +1724,7 @@ ecto.specs <- unique(hilo.smol$Ecto)
 theta <- model$BUGSoutput$sims.list$theta
 theta.mean <- apply(theta, c(2,3), mean)
 
-colnames(theta.mean) <- unique(hilo$Ecto)
+colnames(theta.mean) <- sort(unique(mecto.caps$Ecto))
 theta.frame <- as.data.frame(theta.mean) %>%
   mutate(Tag = host.spec$Tag) %>%
   pivot_longer(cols = !Tag, names_to = "Ecto", values_to = "Occ")
@@ -1529,7 +1746,8 @@ for(i in 1:length(ecto.specs)){
     geom_smooth(method = 'lm', se = T)+
     scale_color_viridis_d(end = 0.95, name = "Host")+
     scale_fill_viridis_d(end = 0.95, name = "Host")+
-    labs(x = "PC1", y = "Occupancy Probability (Host)")+
+    labs(x = "PC1", y = "Occupancy Probability (Host)",
+         title = ecto.specs[i])+
     theme_bw(base_size = 12)+
     theme(panel.grid = element_blank())
 }
@@ -1539,8 +1757,8 @@ for(i in 1:length(ecto.specs)){
   plot_layout(guides = "collect")&
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "interaction_plts.jpeg", width = 8, height = 6,
-#        units = "in", dpi = 600)
+# ggsave(filename = "interaction_plts_sansabund.jpeg", width = 8, 
+#        height = 6, units = "in", dpi = 600)
 
 # Effect of capture no
 c1 <- model$BUGSoutput$sims.list$c1
@@ -1563,10 +1781,11 @@ ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "capno_75_interac.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "capno_75_sansabund.jpeg", width = 10,
+#        height = 4, units = "in")
 
 # Julian date
 c2 <- model$BUGSoutput$sims.list$c2
@@ -1588,10 +1807,11 @@ ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+        panel.grid = element_blank(), legend.position = "None",
+        plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "datecov_75_interac.jpeg", width = 9, height = 4,
-#        units = "in")
+# ggsave(filename = "datecov_75_sansabund.jpeg", width = 10, 
+#        height = 4, units = "in")
 
 # Bayesian r-squared ---------------------
 # Calculation for model variance
@@ -1637,8 +1857,23 @@ host.r2 <- Apply(data = list(host.res, host.yhat), margins = 2,
 # Vector of species names
 ecto.specs <- names(ecto.list2)
 
+# Get estimated # hosts
+# occ.out <- model$BUGSoutput$sims.list$Y
+# occ.mat <- apply(occ.out, c(2,3), mean)
+# colnames(occ.mat) <- ecto.specs
+# colnames(occ.mat)[15] <- "UnknownMesostigmata"
+# 
+# host.frame <- as.data.frame(cbind(occ.mat, hostspec)) %>%
+#   mutate(hostID = 1:nrow(.)) %>%
+#   pivot_longer(Ctenophthalmus_pseudagyrtes:UnknownMesostigmata, 
+#                values_to = "OccProb", names_to = "Ecto") %>%
+#   filter(OccProb > 0.75) %>%
+#   group_by(Ecto) %>%
+#   summarise(nhost = length(unique(hostspec)))
+# Infested species did not change- keep old code
+
 # Site-level r-squared
-mean.site.r2 <- apply(site.r2, 1, mean)
+mean.site.r2 <- apply(site.r2, 1, mean, na.rm = T)
 median.site.r2 <- apply(site.r2, 1, median)
 site.df <- data.frame(Ecto = ecto.specs, site.r2 = mean.site.r2,
                       median.r2 = median.site.r2)
@@ -1669,7 +1904,7 @@ site.r2.fig <- ggplot(data = site.df, aes(x = Order,
 #        units = "in", dpi = 600)
 
 # Host-level r-squared
-mean.host.r2 <- apply(host.r2, 1, mean)
+mean.host.r2 <- apply(host.r2, 1, mean, na.rm = T)
 host.df <- data.frame(Ecto = ecto.specs, host.r2 = mean.host.r2)
 
 # Host species:
@@ -1736,345 +1971,188 @@ r2site + r2host +
   plot_layout(guides = "collect")+
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "r2nhost_rare.jpeg", width = 10, height = 3,
-#        units = "in", dpi = 600)
+# ggsave(filename = "r2nhost_sansabund.jpeg", width = 10, 
+#        height = 3, units = "in", dpi = 600)
 
-# Get ecto abundances on hosts to sort by Benton class ------
-# Look at P. leucopus instead of this?
-# Get parasite abund for each host
-ecto.host.abund <- mamm.ecto %>%
-  select(Abbrev, Order, Family, Genus, Species, Other) %>%
-  filter(is.na(Order) == F) %>%
-  mutate(Species = case_when(Genus == "Ixodes" & 
-                               Species == "scapularis" ~
-                               paste(Species, Other, sep = "_"),
-                             TRUE ~ Species)) %>%
+# Ecto abundance vs specificity -------------
+abund.hosts <- mecto.clean %>%
+  select(SampleNo., Genus, Species, Other) %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
-  select(Abbrev, Ecto) %>%
-  group_by(Abbrev, Ecto) %>%
-  summarise(spec_abund = n())
-
-ecto.host.abund %>%
+  #Comment this line to keep Iscap aggregated:
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
+  filter(Ecto != "") %>%
   group_by(Ecto) %>%
-  summarise(abund = sum(spec_abund)) %>%
-  arrange(desc(abund)) #%>%
-  # write.csv(., file = "ectolist.csv", row.names = F)
+  summarise(Abund = n()) %>%
+  left_join(n.host, by = c("Ecto" = "ecto"))
 
-# Make figs for raw abundances
-abundplts <- list()
-for(i in 1:length(unique(ecto.host.abund$Ecto))){
-  sub <- ecto.host.abund[ecto.host.abund$Ecto == unique(ecto.host.abund$Ecto)[i],]
-  
-  abundplts[[i]] <- ggplot(data = sub, 
-                aes(x = fct_reorder(Abbrev, desc(spec_abund)), 
-                         y = spec_abund))+
-    geom_col(width = 0.7)+
-    labs(x = "Hosts", y = "Abundance", 
-         title = unique(ecto.host.abund$Ecto)[i])+
-    theme_bw()+
-    theme(panel.grid = element_blank())
-}  
-
-# Example figures
-abundplts[[8]]+abundplts[[15]] +
-  plot_annotation(tag_levels = "a")
-
-# ggsave(filename = "samplepreffig.jpeg", width = 6, height = 2.5,
-#        units = "in")
-
-# Host generalists: pseudagyrtes, 2 ixodes, quirini, o leucopus
-(abundplts[[3]]+abundplts[[5]])/
-  (abundplts[[6]]+abundplts[[8]])/
-  (abundplts[[9]]+plot_spacer())&
-  plot_annotation(tag_levels = "a")
-
-# ggsave(filename = "generalists.jpeg", width = 6, height = 5, 
-#        units = "in")
-
-# Get host relative abundances
-ecto.host.rel <- mamm.clean %>%
-  mutate(Abund = rowSums(select(., `1`:`9`), na.rm = T)) %>%
-  group_by(Abbrev) %>%
-  summarise(Abund = sum(Abund)) %>%
-  ungroup() %>%
-  mutate(RelAbund = Abund/sum(Abund)) %>%
-  select(-Abund) %>%
-  right_join(y = ecto.host.abund, by = "Abbrev") %>%
-  mutate(rel_spec_abund = (1-RelAbund)*spec_abund)
-
-relplots <- list()
-for(i in 1:length(unique(ecto.host.rel$Ecto))){
-  sub <- ecto.host.rel[ecto.host.rel$Ecto == unique(ecto.host.rel$Ecto)[i],]
-  
-  relplots[[i]] <- ggplot(data = sub, 
-                aes(x = fct_reorder(Abbrev, desc(rel_spec_abund)), 
-                    y = rel_spec_abund))+
-    geom_col(width = 0.8)+
-    labs(x = "Host Species", y = "Relative Abundance", 
-         title = unique(ecto.host.rel$Ecto)[i])+
-    theme_bw()+
-    theme(panel.grid = element_blank())
-}
-
-benton.class.site <- read.csv("ectolist.csv") #%>%
-  mutate(class = factor(class)) %>%
-  filter(is.na(class) == F) %>%
-  left_join(., site.df, by = c("Ecto"))
-
-kruskal.test(data = benton.class.site, site.r2~class)
-kruskal_effsize(data= benton.class.site, site.r2~class)
-
-ggplot(data = benton.class.site, aes(x = class, y = site.r2))+
-  geom_boxplot(fill = "lightgray")+
-  geom_jitter(aes(color = Order))+
+ggplot(data = abund.hosts, aes(x = hosts, y = log(Abund)))+
+  geom_point(aes(color = Order), size = 2)+
+  geom_smooth(method = 'lm', color = "black")+
   scale_color_viridis_d(end = 0.9)+
-  labs(x = "Benton Class", y = bquote("Site"~R^2))+
+  labs(x = "Hosts", y = "log(Abundance)")+
   theme_bw()+
   theme(panel.grid = element_blank())
 
-# ggsave(filename= "benton_site_full.jpeg", width = 6, height = 4,
-#        units = "in", dpi = 600)
+summary(lm(data = abund.hosts, log(Abund)~hosts))
 
-benton.class.host <- read.csv("ectolist.csv") %>%
-  mutate(class = factor(class)) %>%
-  filter(is.na(class) == F) %>%
-  left_join(., host.df, by = c("Ecto"))
-
-kruskal_test(data = benton.class.host, host.r2~class)
-kruskal_effsize(data = benton.class.host, host.r2~class)
-
-ggplot(data = benton.class.host, aes(x = class, y = host.r2))+
-  geom_boxplot(fill = "lightgray")+
-  geom_jitter(aes(color = Order))+
-  scale_color_viridis_d(end = 0.9)+
-  labs(x = "Benton Class", y = bquote("Host"~R^2))+
-  theme_bw()+
-  theme(panel.grid = element_blank())
-
-# ggsave(filename= "benton_host_full.jpeg", width = 6, height = 4,
-#        units = "in", dpi = 600)
-
-# Host occupancy model -------------------------
-# Coerce mammal data to wide format
-mamm.clean <- mamm.ecto %>%
-  select(Site, Day, Abbrev) %>%
-  mutate(Occ = 1) %>%
-  complete(Site, Day, Abbrev) %>%
-  pivot_wider(names_from = "Day", values_from = "Occ", 
-              values_fn = list(Occ = "sum"), values_fill = 0) 
-
-# Coerce to array
-mamm.array <- abind(split(mamm.clean, mamm.clean$Abbrev), 
-      along = 3)
-mamm.array <- mamm.array[,-c(1:2),]
-rownames(mamm.array) <- unique(mamm.clean$Site)
-
-# Clean it up
-mamm.array[is.na(mamm.array)] <- 0
-mamm.array <- array(as.numeric(mamm.array), dim = dim(mamm.array))
-mamm.array[mamm.array > 1] <- 1
-
-# New date covariate
-missing.dates <- read.csv("Nocap_sites.csv") %>%
-  mutate(Date = as.Date(Date, format = "%d/%m/%Y"))
-
-mamm.date <- mamm.ecto %>%
-  full_join(y = missing.dates, by = c("Site", "Date", "Day")) %>%
-  mutate(julian = format(Date, "%j")) %>%
-  mutate(julian = as.vector(scale(as.numeric(julian)))) %>%
-  dplyr::select(Site, Day, julian) %>%
-  distinct(Site, Day, .keep_all = T) %>%
-  pivot_wider(names_from = Day, values_from = julian) %>%
-  arrange(Site) %>%
-  relocate(Site, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`) 
-
-date.cov <- as.matrix(mamm.date[,-1], nrow = nrow(mamm.date),
-                      ncol = ncol(mamm.date)-1)
-
-# Write MSOM
-cat("
-    model{
-    # Hyperpriors
-    a0.mean ~ dunif(0,1)
-    mean.a0 <- log(a0.mean)-log(1-a0.mean)
-    tau.a0 ~ dgamma(0.1, 0.1)
-    
-    a1.mean ~ dunif(0,1)
-    mean.a1 <- log(a1.mean)-log(1-a1.mean)
-    tau.a1 ~ dgamma(0.1, 0.1)
-    
-    a2.mean ~ dunif(0,1)
-    mean.a2 <- log(a2.mean)-log(1-a2.mean)
-    tau.a2 ~ dgamma(0.1, 0.1)
-    
-    b0.mean ~ dunif(0,1)
-    mean.b0 <- log(b0.mean)-log(1-b0.mean)
-    tau.b0 ~ dgamma(0.1, 0.1)
-    
-    b1.mean ~ dunif(0,1)
-    mean.b1 <- log(b1.mean)-log(1-b1.mean)
-    tau.b1 ~ dgamma(0.1, 0.1)
-    
-    # Species-level priors
-    for(i in 1:nspec){
-      
-      a0[i] ~ dnorm(mean.a0, tau.a0)
-      a1[i] ~ dnorm(mean.a1, tau.a1)
-      a2[i] ~ dnorm(mean.a2, tau.a2)
-      
-      b0[i] ~ dnorm(mean.b0, tau.b0)
-      b1[i] ~ dnorm(mean.b1, tau.b1)
-      
-      # Occupancy
-      for(j in 1:nsite){
-        logit(psi[j,i]) <- a0[i] + a1[i]*deadveg[j] + 
-                            a2[i]*grassforb[j]
-        Z[j,i] ~ dbern(psi[j,i])
-        
-       # Detection
-       for(k in 1:nday){
-         logit(p[j,k,i]) <- b0[i] + b1[i]*date[j,k]
-         obs[j,k,i] ~ dbern(p[j,k,i]*Z[j,i])
-        }
-      }
-    }
-    }", file = "HostMSOM.txt")
-
-# Set up and run
-nspec <- dim(mamm.array)[3]
-nsite <- dim(mamm.array)[1]
-nday <- dim(mamm.array)[2]
-
-data <- list(nspec = nspec, nsite = nsite, nday = nday, 
-             deadveg = comp.cov1, grassforb = comp.cov2,
-             date = date.cov, obs = mamm.array)
-
-# Get observed presence-absence matrix
-maxobs <- apply(mamm.array, c(1,3), max)
-
-params <- c('a1', 'a2', 'b1', 'psi', 'Z')
-
-# Init values
-inits <- function(){
-  inits <- list(Z = maxobs)
-}
-
-# smamm.model <- jags(model.file = 'HostMSOM.txt', data = data,
-#               n.chains = 3, parameters.to.save = params,
-#               inits = inits, n.burnin = 1000, n.iter = 5000,
-#               n.thin = 5)
-# 
-# saveRDS(smamm.model, file = "HostMod.rds")
-
-smamms <- readRDS(file = "HostMod.rds")
-
-# Get dead veg coefs
-mamma1 <- as.data.frame(smamms$BUGSoutput$sims.list$a1)
-colnames(mamma1) <- unique(mamm.clean$Abbrev)
-
-mamm.plt1 <- mamma1 %>%
-  pivot_longer(cols = everything(), names_to = "MammSpec", 
-               values_to = "Output") %>%
-  group_by(MammSpec) %>%
-  summarise(meana1 = mean(Output), lo = quantile(Output, 0.125),
-            hi = quantile(Output, 0.875))
-
-deadveg <- ggplot(data = mamm.plt1, aes(x = MammSpec, y = meana1))+
-  geom_point()+
-  geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-  labs(x = "Host Species", y = "Coefficient")+
-  theme_bw(base_size = 12)+
-  theme(panel.grid = element_blank())
-
-# ggsave("mammcoef.jpeg", width = 6, height = 3, units = "in")
-
-# get grass/forb coef
-mamma2 <- as.data.frame(smamms$BUGSoutput$sims.list$a2)
-colnames(mamma2) <- unique(mamm.clean$Abbrev)
-
-mamm.plt2 <- mamma2 %>%
-  pivot_longer(cols = everything(), names_to = "MammSpec", 
-               values_to = "Output") %>%
-  group_by(MammSpec) %>%
-  summarise(meana2 = mean(Output), lo = quantile(Output, 0.125),
-            hi = quantile(Output, 0.875))
-
-grassforb <- ggplot(data = mamm.plt2, aes(x = MammSpec, y = meana2))+
-  geom_point()+
-  geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-  labs(x = "Host Species", y = "Coefficient")+
-  theme_bw(base_size = 12)+
-  theme(panel.grid = element_blank())
-# mamms mostly differ in forest vs not preferences
-
-deadveg / grassforb &
-  plot_annotation(tag_levels = "a")
-
-# ggsave(filename = "mamm_prefs.jpeg", width = 6, height = 4,
+# ggsave(filename="specificityabund.jpeg", width = 5, height = 3,
 #        units = "in")
 
-# merge ectos and smamms
-a1s$Parasite <- rownames(a1s)
-ecto.prefs <- read.csv(file = "HostPrefs_raw.csv")
-
-cov.resps <- full_join(mamm.plt1, ecto.prefs, 
-          by = c("MammSpec" = "PrefMammal")) %>%
-  filter(is.na(Parasite) == F) %>%
-  left_join(y = a1s, by = "Parasite") %>%
-  select(-c(lo.x, hi.x, lo.y, hi.y, sig)) %>%
-  left_join(y = site.df, by = c("Parasite" = "Ecto")) %>%
-  select(MammSpec:mean, Classification) %>%
-  mutate(Habitat = case_when(MammSpec %in% c("ZAHU", "MIPE") ~ "Open",
-                             MammSpec %in% c("PEMA", "MYGA")~"Forest",
-                             TRUE ~ "Generalist"))
-
-# Test host/parasite coef associations
-summary(lm(data = cov.resps, mean~meana1))
-t.test(data = cov.resps, mean~Habitat) 
-ggplot(data = cov.resps, aes(x = Habitat, y = mean))+
-  geom_boxplot(fill = "lightgray")+
-  # geom_point()+
-  # geom_smooth(method = 'lm', se = F, color = 'black')+
-  labs(x = "Host Habitat", y = "Parasite Coefficient")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-# ggsave(filename = "hostcoefbox.jpeg", width = 5, height = 3,
-#        units = "in")
-
-# Do it with primary hosts only
-summary(lm(data = cov.resps[cov.resps$Secondary != "Secondary_host",],
-           mean~meana1))
-t.test(data = cov.resps[cov.resps$Secondary 
-                             != "Secondary_host",],
-       mean~Habitat, paired = F)
-cohens_d(data = cov.resps[cov.resps$Secondary != "Secondary_host",],
-          formula = mean~Habitat)
-
-ggplot(data = cov.resps[cov.resps$Secondary != "Secondary_host",], 
-       aes(x = Habitat, y = mean))+
-  geom_boxplot(fill = "lightgray")+
-  # geom_jitter(aes(color = Classification))+
-  scale_color_viridis_d()+
-  labs(x = "Host Habitat", y = "Parasite Coefficient")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-# ggsave(filename = "hostcoef_prim_raw.jpeg", width = 5,
-#        height = 3, units = "in")
-
-# Getting P. leucopus ectos ---------------------
-pele.ectos <- mamm.ecto %>%
-  select(Abbrev, Site, Order, Family, Genus, Species, Other) %>%
-  filter(is.na(Order) == F) %>%
-  mutate(Species = case_when(Genus == "Ixodes" & 
-                               Species == "scapularis" ~
-                               paste(Species, Other, sep = "_"),
-                             TRUE ~ Species)) %>%
+# P. leucopus captured ectos --------
+# Get parasite counts
+pele.necto <- mecto.clean %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
-  select(Abbrev, Site, Ecto) %>%
-  group_by(Abbrev, Site, Ecto) %>%
-  summarise(spec_abund = n()) %>%
-  filter(Abbrev == "PELE")
+  #Comment this line to keep Iscap aggregated:
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
+  select(Site, Day, Tag, HostName, Ecto) %>%
+  filter(HostName == "P . leucopus") %>%
+  left_join(comp.frame[,c("pc1", "Site")], by = "Site") %>%
+  mutate(Ecto = case_when(Ecto == "" ~ NA,
+                          TRUE ~ Ecto)) %>%
+  group_by(Tag, pc1) %>%
+  summarise(necto = length(na.omit(Ecto))) 
+
+# Check for overdispersion: mean & var should be close
+mean(pele.necto$necto)
+var(pele.necto$necto)
+# pretty overdispersed: zero-infl neg binomial it is
+
+pele.mod <- zeroinfl(necto ~ pc1 | pc1, data = pele.necto, 
+                 dist = 'negbin')
+summary(pele.mod)
+
+# Dispersion Statistic
+E2 <- resid(pele.mod, type = "pearson")
+N  <- nrow(pele.necto)
+p  <- length(coef(pele.mod)) + 1 # '+1' is due to theta
+sum(E2^2) / (N - p)
+# close to 1- looks good
+
+# Plot it
+ggplot(data = pele.necto, aes(x = pc1, y = necto))+
+  geom_jitter()+
+  geom_smooth(aes(y = predict(pele.mod, type = "count")), 
+              color = "black")+
+  labs(x = "Vegetation Coefficient (PC1)", 
+       y = "Ectoparasites Collected")+
+  theme_bw()+
+  theme(panel.grid = element_blank())
+
+ggsave(filename = "pele_infest.jpeg", width = 5, height = 3,
+       units = "in", dpi = 600)
+   
+# T. striatus captured ectos --------------
+# Get parasite counts
+tast.necto <- mecto.clean %>%
+  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  #Comment this line to keep Iscap aggregated:
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
+  dplyr::select(Site, Day, Tag, HostName, Ecto) %>%
+  filter(HostName == "T . striatus")  %>%
+  left_join(comp.frame[,c("pc1", "Site")], by = "Site") %>%
+  mutate(Ecto = case_when(Ecto == "" ~ NA,
+                          TRUE ~ Ecto)) %>%
+  group_by(Tag, pc1) %>%
+  summarise(necto = length(na.omit(Ecto))) 
+
+# Check for overdispersion: mean & var should be close
+mean(tast.necto$necto)
+var(tast.necto$necto)
+# pretty overdispersed: zero-infl neg binomial it is
+
+tast.mod <- zeroinfl(necto ~ pc1 | pc1, data = tast.necto, 
+                     dist = 'negbin')
+summary(tast.mod)
+
+# Dispersion Statistic
+E2 <- resid(tast.mod, type = "pearson")
+N  <- nrow(tast.necto)
+p  <- length(coef(tast.mod)) + 1 # '+1' is due to theta
+sum(E2^2) / (N - p)
+# not as close to 1 but still ok
+
+# Plot it
+ggplot(data = tast.necto, aes(x = pc1, y = necto))+
+  geom_jitter()+
+  geom_smooth(aes(y = predict(tast.mod, type = "count")), 
+              color = "black")+
+  # add geom_smooth if I can get it to work
+  labs(x = "Vegetation Coefficient (PC1)", 
+       y = "Ectoparasites Collected")+
+  theme_bw()+
+  theme(panel.grid = element_blank())
+
+# ggsave(filename = "tast_infest.jpeg", width = 5, height = 3,
+#        units = "in", dpi = 600)
+
+# Check for spatial autocorrelation/plot sites---------------
+traplines <- st_read("UpdatedTracks.kml")
+
+traplines <- st_crop(traplines, xmin = -73.4, xmax = -72.75, 
+                   ymin = 44.1, ymax = 44.6)
+
+# Convert to midpoints
+st_line_midpoints <- function(sf_lines = NULL){
+  
+  g <- st_geometry(sf_lines)
+  
+  g_mids <- lapply(g, function(x){
+    
+    coords <- as.matrix(x)
+    
+    # this is just a copypaste of View(maptools:::getMidpoints):
+    get_mids <- function (coords){
+      dist <- sqrt((diff(coords[, 1])^2 + (diff(coords[, 2]))^2))
+      dist_mid <- sum(dist)/2
+      dist_cum <- c(0, cumsum(dist))
+      end_index <- which(dist_cum > dist_mid)[1]
+      start_index <- end_index - 1
+      start <- coords[start_index, ]
+      end <- coords[end_index, ]
+      dist_remaining <- dist_mid - dist_cum[start_index]
+      mid <- start + (end - start) * (dist_remaining/dist[start_index])
+      return(mid)
+    }
+    
+    mids <- st_point(get_mids(coords))
+  })
+}
+trap.list <- st_line_midpoints(traplines)
+
+# Build the data frame
+trap.df <- as.data.frame(do.call(rbind, trap.list))
+names(trap.df) <- c("X", "Y")
+trap.df$Name <- traplines$Name
+
+# Add habitat
+trap.df <- trap.df %>%
+  left_join(y=select(veg.site, Site, Habitat), 
+            by = c("Name" = "Site"))
+
+# Plot it
+alldat <- map_data("county")
+
+chittenden <- alldat[alldat$region=="vermont" &
+                       alldat$subregion=="chittenden",]
+
+ggplot(data = chittenden, aes(x = long, y = lat, fill = Habitat))+
+  geom_polygon(color = "black", fill = "lightgray")+
+  geom_point(data = trap.df, aes(x = X, y = Y), 
+              size = 3, alpha = 0.6,
+              pch = 21, color = "black")+
+  scale_fill_viridis_d()+
+  # North arrow isn't working
+  # north()+
+  theme_classic(base_size = 14)+
+  theme(axis.title = element_blank(), axis.text = element_blank())
+
+# ggsave(file = "sitemap.jpeg", dpi = 600)
+
+# Use MMRR to check for spatial autocorrelation
+# If autocorrelated, geographic distance will be best predictor
