@@ -683,17 +683,9 @@ inits <- function(){
 
 # Save model
 # saveRDS(model, file = "ectomod.rds")
-# saveRDS(model, file = "sansrarehost.rds")
-# saveRDS(model, file = "iscap_agg.rds")
-# saveRDS(model, file = "mite_agg.rds")
-# saveRDS(model, file = "interaction_term.rds")
 
 # Load model
 # model <- readRDS("ectomod.rds")
-# model <- readRDS("sansrarehost.rds")
-# model <- readRDS("iscap_agg.rds")
-# model <- readRDS("mite_agg.rds")
-# model <- readRDS("interaction_term.rds")
 model <- readRDS("sansabund.rds")
 
 # Model selection: site ------------------------
@@ -2155,4 +2147,82 @@ ggplot(data = chittenden, aes(x = long, y = lat, fill = Habitat))+
 # ggsave(file = "sitemap.jpeg", dpi = 600)
 
 # Use MMRR to check for spatial autocorrelation
-# If autocorrelated, geographic distance will be best predictor
+# If autocorrelated, geographic distance will be sig predictor
+
+vegdist <- as.matrix(dist(cbind(comp.cov1, comp.cov2),upper = T))
+
+trap.xy <- trap.df[-11, 1:2]
+eucdist <- as.matrix(dist(trap.xy, upper = T))
+
+mamm.counts <- mamm.2020 %>%
+  distinct_at(.vars = vars(Site, Abbrev, Tag), .keep_all = T) %>%
+  group_by(HostName, Site) %>%
+  summarise(Count = n()) %>%
+  pivot_wider(names_from=HostName, values_from=Count,
+              values_fill = 0)
+
+host.dist <- as.matrix(dist(mamm.counts[,-1]))
+
+ecto.dist <- as.matrix(dist(sitemax, upper = T))
+
+MMRR<-function(Y,X,nperm=999){
+  #compute regression coefficients and test statistics
+  nrowsY<-nrow(Y)
+  y<-unfold(Y)
+  if(is.null(names(X)))names(X)<-paste("X",1:length(X),sep="")
+  Xmats<-sapply(X,unfold)
+  fit<-lm(y~Xmats)
+  coeffs<-fit$coefficients
+  summ<-summary(fit)
+  r.squared<-summ$r.squared
+  tstat<-summ$coefficients[,"t value"]
+  Fstat<-summ$fstatistic[1]
+  tprob<-rep(1,length(tstat))
+  Fprob<-1
+  
+  #perform permutations
+  for(i in 1:nperm){
+    rand<-sample(1:nrowsY)
+    Yperm<-Y[rand,rand]
+    yperm<-unfold(Yperm)
+    fit<-lm(yperm~Xmats)
+    summ<-summary(fit)
+    Fprob<-Fprob+as.numeric(summ$fstatistic[1]>=Fstat)
+    tprob<-tprob+as.numeric(abs(summ$coefficients[,"t value"])>=abs(tstat))
+  }
+  
+  #return values
+  tp<-tprob/(nperm+1)
+  Fp<-Fprob/(nperm+1)
+  names(r.squared)<-"r.squared"
+  names(coeffs)<-c("Intercept",names(X))
+  names(tstat)<-paste(c("Intercept",names(X)),"(t)",sep="")
+  names(tp)<-paste(c("Intercept",names(X)),"(p)",sep="")
+  names(Fstat)<-"F-statistic"
+  names(Fp)<-"F p-value"
+  return(list(r.squared=r.squared,
+              coefficients=coeffs,
+              tstatistic=tstat,
+              tpvalue=tp,
+              Fstatistic=Fstat,
+              Fpvalue=Fp))
+}
+
+# unfold converts the lower diagonal elements of a matrix into a vector
+# unfold is called by MMRR
+
+unfold<-function(X){
+  x<-vector()
+  for(i in 2:nrow(X)) x<-c(x,X[i,1:i-1])
+  return(x)
+}
+
+# Check for independence between x values
+MMRR(vegdist, list(eucdist)) 
+MMRR(host.dist, list(eucdist))
+MMRR(host.dist, list(vegdist))
+# We good
+
+# Test for autocorrelation
+MMRR(ecto.dist, list(vegdist, eucdist, host.dist))
+# No spatial autocorrelation
