@@ -203,7 +203,8 @@ ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
 # Hosts per ecto species
 n.host <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
-  mutate(Species = case_when(Genus == "Ixodes" & 
+  # Comment the following to aggregate I.scapularis:
+  mutate(Species = case_when(Genus == "Ixodes" &
                                Species == "scapularis" ~
                                paste(Species, Other, sep = "_"),
                              TRUE ~ Species)) %>%
@@ -676,17 +677,22 @@ inits <- function(){
 }
 
 # Send model to JAGS
-# model <- jags(model.file = 'ectomod.txt', data = datalist,
+# model <- jags(model.file = 'ectomod_V1V2D.txt', data = datalist,
 #               n.chains = 3, parameters.to.save = params,
 #               inits = inits, n.burnin = 15000, n.iter = 30000,
 #               n.thin = 20)
 
 # Save model
 # saveRDS(model, file = "ectomod.rds")
+# saveRDS(model, file = "mesos_agg.rds")
+# saveRDS(model, file = "iscap_agg.rds")
+# saveRDS(model, file = "sansrarehosts.rds")
 
 # Load model
 # model <- readRDS("ectomod.rds")
 model <- readRDS("sansabund.rds")
+# model <- readRDS("mesos_agg.rds")
+# model <- readRDS("iscap_agg.rds")
 
 # Model selection: site ------------------------
 # Full model
@@ -1481,7 +1487,7 @@ rownames(a1s) <- colnames(site.occ)[-c(1)]
 ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_point(aes(x = rownames(a1s), y = 8, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 11, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
@@ -1491,7 +1497,7 @@ ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "vegforest_75_sansabund.jpeg", width = 10,
+# ggsave(filename = "vegforest_75_sansrares.jpeg", width = 10,
 #        height = 4,units = "in")
 
 # Veg comp: grass or forb
@@ -1508,7 +1514,7 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 4.4, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 7, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
   theme_bw()+
@@ -1517,7 +1523,7 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "vegforb_75_sansabund.jpeg", width = 10, 
+# ggsave(filename = "vegforb_75_sansrares.jpeg", width = 10,
 #        height = 4, units = "in")
 
 # Host abundance
@@ -1559,7 +1565,7 @@ ggplot(data = a4s, aes(x = rownames(a4s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 7.5, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 10.5, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Host Diversity")+
   theme_bw()+
@@ -1568,7 +1574,7 @@ ggplot(data = a4s, aes(x = rownames(a4s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "diversity_75_sansabund.jpeg", width = 9, 
+# ggsave(filename = "diversity_75_sansrares.jpeg", width = 9,
 #        height = 4, units = "in")
 
 # Effect of host spec
@@ -1649,7 +1655,7 @@ ggplot(data = b2s, aes(x = rownames(b2s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "hostmass_75_sansabund.jpeg", width = 9, 
+# ggsave(filename = "hostmass_75_sansrares.jpeg", width = 9,
 #        height = 4, units = "in")
 
 # host sex
@@ -1677,7 +1683,7 @@ ggplot(data = b3s, aes(x = rownames(b3s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "hostsex_75_sansabund.jpeg", width = 10, 
+# ggsave(filename = "hostsex_75_sansrares.jpeg", width = 10,
 #        height = 4, units = "in")
 
 # Host/habitat interaction term
@@ -1749,11 +1755,13 @@ for(i in 1:length(ecto.specs)){
   plot_layout(guides = "collect")&
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "interaction_plts_sansabund.jpeg", width = 8, 
+# ggsave(filename = "interaction_plts_sansrares.jpeg", width = 8,
 #        height = 6, units = "in", dpi = 600)
 
 # Effect of capture no
 c1 <- model$BUGSoutput$sims.list$c1
+
+quantile(c1, c(0.125, 0.875))
 
 c1s <- data.frame(mean = apply(c1, 2, mean), 
            lo = apply(c1, 2, quantile, 0.125), 
@@ -1776,11 +1784,12 @@ ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "capno_75_sansabund.jpeg", width = 10,
+# ggsave(filename = "capno_75_sansrares.jpeg", width = 10,
 #        height = 4, units = "in")
 
 # Julian date
 c2 <- model$BUGSoutput$sims.list$c2
+quantile(c2, c(0.125, 0.875))
 
 c2s <- data.frame(mean = apply(c2, 2, mean), 
            lo = apply(c2, 2, quantile, 0.125), 
@@ -1793,7 +1802,7 @@ ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(c2s), y = 1.1, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(c2s), y = 1.2, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Julian Date Coefficient")+
   theme_bw()+
@@ -1802,7 +1811,7 @@ ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
-# ggsave(filename = "datecov_75_sansabund.jpeg", width = 10, 
+# ggsave(filename = "datecov_75_sansrares.jpeg", width = 10,
 #        height = 4, units = "in")
 
 # Bayesian r-squared ---------------------
@@ -1943,6 +1952,13 @@ summary(lm(data = site.df, formula = hosts~site.r2))
 summary(lm(data = host.df, formula = hosts~host.r2))
 # This is wild
 
+# look at site r2 sans o. leucopus:
+summary(lm(data = site.df[site.df$Ecto != "Orchopeas_leucopus",],
+           formula = hosts~site.r2))
+qplot(data = site.df[site.df$Ecto != "Orchopeas_leucopus",],
+      x = site.r2, y = hosts)
+# no pattern when o. leucopus is dropped
+
 r2site <- ggplot(data = site.df, aes(x = site.r2, y = hosts))+
   geom_point(aes(color = Order), size = 2)+
   # geom_smooth(se = F, method = 'lm', color = "black")+
@@ -1963,7 +1979,7 @@ r2site + r2host +
   plot_layout(guides = "collect")+
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "r2nhost_sansabund.jpeg", width = 10, 
+# ggsave(filename = "r2nhost_sansrares.jpeg", width = 10,
 #        height = 3, units = "in", dpi = 600)
 
 # Ecto abundance vs specificity -------------
@@ -2002,11 +2018,39 @@ pele.necto <- mecto.clean %>%
                           TRUE ~ Ecto)) %>%
   select(Site, Day, Tag, HostName, Ecto) %>%
   filter(HostName == "P . leucopus") %>%
-  left_join(comp.frame[,c("pc1", "Site")], by = "Site") %>%
+  left_join(comp.frame[,c("pc1", "Site","Habitat")], by = "Site") %>%
   mutate(Ecto = case_when(Ecto == "" ~ NA,
                           TRUE ~ Ecto)) %>%
   group_by(Tag, pc1) %>%
   summarise(necto = length(na.omit(Ecto))) 
+
+# Get relative proportions for each habitat:
+ecto.habs <- mecto.clean %>%
+  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  select(Site, Day, Tag, HostName, Ecto) %>%
+  filter(HostName == "P . leucopus") %>%
+  left_join(comp.frame[,c("pc1", "Site","Habitat")], by = "Site") %>%
+  select(Ecto,Habitat, Site) %>%
+  filter(Ecto != "") %>%
+  group_by(Ecto, Habitat,Site) %>%
+  summarise(count = n()) 
+
+ecto.mat <- ecto.habs %>%
+  # mutate_at(.vars = "count", function(x) x[x > 1] <- 1) %>%
+  pivot_wider(names_from = Ecto, values_from = count, 
+              values_fill=0)
+
+# look at within-habitat variation
+test <- beta.pair.abund(ecto.mat[,-c(1:2)])
+bd <- betadisper(test[[3]], group = ecto.mat$Habitat)
+plot(bd)
+# Habitats different; farm & field have some overlap but not much
+
+# Look @ dominance change vs loss
+habs.pooled <- select(ecto.mat, -Site)
+habs.pooled <- aggregate(. ~ Habitat, habs.pooled, sum)
+
+beta.multi.abund(habs.pooled[,-c(1:2)])
 
 # Check for overdispersion: mean & var should be close
 mean(pele.necto$necto)
@@ -2025,7 +2069,7 @@ sum(E2^2) / (N - p)
 # close to 1- looks good
 
 # Plot it
-ggplot(data = pele.necto, aes(x = pc1, y = necto))+
+pele.plt <- ggplot(data = pele.necto, aes(x = pc1, y = necto))+
   geom_jitter()+
   geom_smooth(aes(y = predict(pele.mod, type = "count")), 
               color = "black")+
@@ -2034,8 +2078,8 @@ ggplot(data = pele.necto, aes(x = pc1, y = necto))+
   theme_bw()+
   theme(panel.grid = element_blank())
 
-ggsave(filename = "pele_infest.jpeg", width = 5, height = 3,
-       units = "in", dpi = 600)
+# ggsave(filename = "pele_infest.jpeg", width = 5, height = 3,
+#        units = "in", dpi = 600)
    
 # T. striatus captured ectos --------------
 # Get parasite counts
@@ -2070,7 +2114,7 @@ sum(E2^2) / (N - p)
 # not as close to 1 but still ok
 
 # Plot it
-ggplot(data = tast.necto, aes(x = pc1, y = necto))+
+tast.plt <- ggplot(data = tast.necto, aes(x = pc1, y = necto))+
   geom_jitter()+
   geom_smooth(aes(y = predict(tast.mod, type = "count")), 
               color = "black")+
@@ -2082,6 +2126,48 @@ ggplot(data = tast.necto, aes(x = pc1, y = necto))+
 
 # ggsave(filename = "tast_infest.jpeg", width = 5, height = 3,
 #        units = "in", dpi = 600)
+
+ecto.habs <- mecto.clean %>%
+  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  select(Site, Day, Tag, HostName, Ecto) %>%
+  filter(HostName == "T . striatus") %>%
+  left_join(comp.frame[,c("pc1", "Site","Habitat")], by = "Site") %>%
+  select(Ecto,Habitat) %>%
+  filter(Ecto != "") %>%
+  group_by(Ecto, Habitat) %>%
+  summarise(count = n()) %>%
+  pivot_wider(names_from = Habitat, values_from = count, 
+              values_fill = 0)
+
+props <- apply(ecto.habs[,2:4], 2, function(x) x/sum(x))
+rownames(props) <- ecto.habs$Ecto
+# Not enough parasites in fields/farms for this to be informative
+
+# both species
+(pele.plt|tast.plt) +
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "infest_both.jpeg", width = 7, height = 3, 
+#        units = "in", dpi = 600)
+
+# B brevicauda captured ectos ------------
+# probably could write a function for this
+# Get parasite counts
+blbr.necto <- mecto.clean %>%
+  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  #Comment this line to keep Iscap aggregated:
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
+  dplyr::select(Site, Day, Tag, HostName, Ecto) %>%
+  filter(HostName == "B . brevicauda")  %>%
+  left_join(comp.frame[,c("pc1", "Site")], by = "Site") %>%
+  mutate(Ecto = case_when(Ecto == "" ~ NA,
+                          TRUE ~ Ecto)) %>%
+  group_by(Tag, pc1) %>%
+  summarise(necto = length(na.omit(Ecto))) 
+
+# Only 2 parasites from BLBR; this will not work
 
 # Check for spatial autocorrelation/plot sites---------------
 traplines <- st_read("UpdatedTracks.kml")
@@ -2226,3 +2312,151 @@ MMRR(host.dist, list(vegdist))
 # Test for autocorrelation
 MMRR(ecto.dist, list(vegdist, eucdist, host.dist))
 # No spatial autocorrelation
+
+# Playing more with data ------------------------
+parasite.frame <- mecto.clean %>%
+  filter(is.na(Order) == F) %>%
+  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
+  #Comment this line to keep Iscap aggregated:
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
+  select(Site, Abbrev, Ecto) %>%
+  left_join(select(veg.site, Site, Habitat), by = "Site")
+
+host.props <- mecto.clean %>%
+  select(Site, Tag, Abbrev) %>%
+  distinct() %>%
+  left_join(select(veg.site, Site, Habitat), by = "Site") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(prop = count/sum(count)) %>%
+  ungroup()
+
+host.all <- expand(host.props,Habitat,Abbrev)
+host.all <- full_join(host.props, host.all) 
+
+ggplot(host.all, aes(x = Abbrev, y = count, fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Captured Individuals")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+# ggsave(filename = "hostcounts.jpeg", width = 10,
+#        height = 3, units = "in", dpi = 600)
+
+orle.abund <- parasite.frame %>%
+  filter(Ecto == "Orchopeas_leucopus") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+            by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("PELE", "PEMA", "MYGA",
+                                            "ZAHU", "MIPE"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm","Field",
+                                              "Forest")))
+
+orle.all <- expand(orle.abund,Habitat,Abbrev)
+orle.all <- full_join(orle.abund, orle.all)  
+
+orle.fig <- ggplot(data = orle.all, aes(x = Abbrev, y = adj_count, 
+                            fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+iscl.abund <- parasite.frame %>%
+  filter(Ecto == "Ixodes_scapularis_larva") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+            by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("PELE", "MIPE", "PEMA",
+                                            "ZAHU"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm","Field", 
+                                              "Forest")))
+
+iscl.all <- expand(iscl.abund,Habitat,Abbrev)
+iscl.all <- full_join(iscl.abund, iscl.all)  
+
+iscl.fig <- ggplot(data = iscl.all, aes(x = Abbrev, y = adj_count,
+                                        fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+iscn.abund <- parasite.frame %>%
+  filter(Ecto == "Ixodes_scapularis_nymph") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%  
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+            by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("MIPE", "TAST", "ZAHU",
+                                            "PELE", "PEMA"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm", "Field", 
+                                              "Forest"))) %>%
+  ungroup()
+
+iscn.all <- expand(iscn.abund,Habitat,Abbrev)
+iscn.all <- full_join(iscn.abund, iscn.all)  
+
+iscn.fig <- ggplot(data = iscn.all, aes(x = Abbrev, y = adj_count, fill = Habitat,
+                            label = count))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+mequ.abund <- parasite.frame %>%
+  filter(Ecto == "Megabothris_quirini") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+              by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("MIPE", "PELE", "ZAHU",
+                                              "MYGA", "NAIN",
+                                            "PEMA"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm", "Field", 
+                                                "Forest"))) %>%
+  ungroup()
+
+mequ.all <- expand(mequ.abund,Habitat,Abbrev)
+mequ.all <- full_join(mequ.abund, mequ.all)  
+
+mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = count, 
+                                        fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 14)+
+  theme(panel.grid = element_blank())
+
+(iscl.fig + iscn.fig)/
+  (orle.fig+mequ.fig) +
+  plot_annotation(tag_levels = "a")+
+  plot_layout(guides = "collect")
+
+# ggsave(filename = "generalist_counts.jpeg", width = 8,
+#        height = 6, units = "in", dpi = 600)
