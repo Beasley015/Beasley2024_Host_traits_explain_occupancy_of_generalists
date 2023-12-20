@@ -306,18 +306,20 @@ rich <- mamm.ecto %>%
 summary(lm(data = rich, ecto.rich~Mamm.rich))
 
 ggplot(data = rich, aes(x = Mamm.rich, y = ecto.rich))+
-  geom_point()+
-  geom_smooth(method = 'lm', se = F, color = "black")+
+  geom_point(size =2)+
+  # geom_smooth(method = 'lm', se = F, color = "black")+
   labs(x = "Host Richness", y = "Ectoparasite Richness")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
+
+# ggsave("hostectorich.jpeg", width = 5, height = 3, units = "in")
 
 # Prepping data for MSOM ----------------------
 # Clean data
 mecto.clean <- mamm.ecto %>%
   filter(!(SampleNo. != "" & is.na(Species) == T)) %>%
   # Include this line to filter "rare" hosts (<10 individuals):
-  # filter(!(Abbrev %in% c("NAIN", "MYGA"))) %>%
+  filter(!(Abbrev %in% c("NAIN", "MYGA"))) %>%
   filter(Tag != "RECAP" & Tag != "DESC")
 
 # Select columns and add occupancy column
@@ -690,9 +692,10 @@ inits <- function(){
 
 # Load model
 # model <- readRDS("ectomod.rds")
-model <- readRDS("sansabund.rds")
+# model <- readRDS("sansabund.rds")
 # model <- readRDS("mesos_agg.rds")
 # model <- readRDS("iscap_agg.rds")
+model <- readRDS("sansrarehosts.rds")
 
 # Model selection: site ------------------------
 # Full model
@@ -1484,16 +1487,15 @@ a1s <- data.frame(mean = apply(a1, 2, mean),
                          TRUE ~ ""))
 rownames(a1s) <- colnames(site.occ)[-c(1)]
 
-ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
+veg1 <- ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_point(aes(x = rownames(a1s), y = 11, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   geom_hline(yintercept = 0)+
-  labs(x = "Ectoparasite Species", y = "Veg Composition Coefficient")+
+  labs(x = "Ectoparasite Species", y = "Leaf Litter Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   hjust = 1.1),
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(),
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
@@ -1510,13 +1512,13 @@ a2s <- data.frame(mean = apply(a2, 2, mean),
                          TRUE ~ ""))
 rownames(a2s) <- colnames(site.occ)[-c(1)]
 
-ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
+veg2 <- ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
   geom_point(aes(x = rownames(a1s), y = 7, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
-  labs(x = "Ectoparasite Species", y = "Vertical Structure Coefficient")+
+  labs(x = "Ectoparasite Species", y = "Grass/Forb Coefficient")+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    hjust = 1.1),
@@ -1525,6 +1527,12 @@ ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
 
 # ggsave(filename = "vegforb_75_sansrares.jpeg", width = 10,
 #        height = 4, units = "in")
+
+(veg1/veg2) + 
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "vegplts.jpeg", width = 10, height = 6,
+#        units = "in", dpi = 600)
 
 # Host abundance
 a3 <- model$BUGSoutput$sims.list$a3
@@ -1771,7 +1779,7 @@ c1s <- data.frame(mean = apply(c1, 2, mean),
                          TRUE ~ ""))
 rownames(c1s) <- colnames(site.occ)[-c(1)]
 
-ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
+c1_plt <- ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
@@ -1779,8 +1787,7 @@ ggplot(data = c1s, aes(x = rownames(c1s), y = mean))+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Capture no. Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   hjust = 1.1),
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(),
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
@@ -1798,7 +1805,7 @@ c2s <- data.frame(mean = apply(c2, 2, mean),
                          TRUE ~ ""))
 rownames(c2s) <- colnames(site.occ)[-c(1)]
 
-ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
+c2_plot <- ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
@@ -1813,6 +1820,12 @@ ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
 
 # ggsave(filename = "datecov_75_sansrares.jpeg", width = 10,
 #        height = 4, units = "in")
+
+(c1_plt / c2_plot)+
+  plot_annotation(tag_levels = "a")
+
+ggsave(filename = "detcovs.jpeg", width = 10, height = 8, units = "in",
+       dpi = 600)
 
 # Bayesian r-squared ---------------------
 # Calculation for model variance
@@ -2024,34 +2037,6 @@ pele.necto <- mecto.clean %>%
   group_by(Tag, pc1) %>%
   summarise(necto = length(na.omit(Ecto))) 
 
-# Get relative proportions for each habitat:
-ecto.habs <- mecto.clean %>%
-  unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
-  select(Site, Day, Tag, HostName, Ecto) %>%
-  filter(HostName == "P . leucopus") %>%
-  left_join(comp.frame[,c("pc1", "Site","Habitat")], by = "Site") %>%
-  select(Ecto,Habitat, Site) %>%
-  filter(Ecto != "") %>%
-  group_by(Ecto, Habitat,Site) %>%
-  summarise(count = n()) 
-
-ecto.mat <- ecto.habs %>%
-  # mutate_at(.vars = "count", function(x) x[x > 1] <- 1) %>%
-  pivot_wider(names_from = Ecto, values_from = count, 
-              values_fill=0)
-
-# look at within-habitat variation
-test <- beta.pair.abund(ecto.mat[,-c(1:2)])
-bd <- betadisper(test[[3]], group = ecto.mat$Habitat)
-plot(bd)
-# Habitats different; farm & field have some overlap but not much
-
-# Look @ dominance change vs loss
-habs.pooled <- select(ecto.mat, -Site)
-habs.pooled <- aggregate(. ~ Habitat, habs.pooled, sum)
-
-beta.multi.abund(habs.pooled[,-c(1:2)])
-
 # Check for overdispersion: mean & var should be close
 mean(pele.necto$necto)
 var(pele.necto$necto)
@@ -2235,7 +2220,7 @@ ggplot(data = chittenden, aes(x = long, y = lat, fill = Habitat))+
 # Use MMRR to check for spatial autocorrelation
 # If autocorrelated, geographic distance will be sig predictor
 
-vegdist <- as.matrix(dist(cbind(comp.cov1, comp.cov2),upper = T))
+vegdist <- as.matrix(dist(comp.cov1,upper = T))
 
 trap.xy <- trap.df[-11, 1:2]
 eucdist <- as.matrix(dist(trap.xy, upper = T))
@@ -2369,7 +2354,7 @@ orle.fig <- ggplot(data = orle.all, aes(x = Abbrev, y = adj_count,
   geom_col(position = "dodge")+
   labs(x = "Host Species", y = "Adjusted Count")+
   scale_fill_viridis_d(end = 0.9)+
-  theme_bw(base_size = 14)+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
 iscl.abund <- parasite.frame %>%
@@ -2395,7 +2380,7 @@ iscl.fig <- ggplot(data = iscl.all, aes(x = Abbrev, y = adj_count,
   geom_col(position = "dodge")+
   labs(x = "Host Species", y = "Adjusted Count")+
   scale_fill_viridis_d(end = 0.9)+
-  theme_bw(base_size = 14)+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
 iscn.abund <- parasite.frame %>%
@@ -2417,12 +2402,13 @@ iscn.abund <- parasite.frame %>%
 iscn.all <- expand(iscn.abund,Habitat,Abbrev)
 iscn.all <- full_join(iscn.abund, iscn.all)  
 
-iscn.fig <- ggplot(data = iscn.all, aes(x = Abbrev, y = adj_count, fill = Habitat,
-                            label = count))+
+iscn.fig <- ggplot(data = iscn.all, 
+                   aes(x = Abbrev, y = adj_count,
+                       fill = Habitat))+
   geom_col(position = "dodge")+
   labs(x = "Host Species", y = "Adjusted Count")+
   scale_fill_viridis_d(end = 0.9)+
-  theme_bw(base_size = 14)+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
 mequ.abund <- parasite.frame %>%
@@ -2445,12 +2431,12 @@ mequ.abund <- parasite.frame %>%
 mequ.all <- expand(mequ.abund,Habitat,Abbrev)
 mequ.all <- full_join(mequ.abund, mequ.all)  
 
-mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = count, 
+mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = adj_count, 
                                         fill = Habitat))+
   geom_col(position = "dodge")+
   labs(x = "Host Species", y = "Adjusted Count")+
   scale_fill_viridis_d(end = 0.9)+
-  theme_bw(base_size = 14)+
+  theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
 (iscl.fig + iscn.fig)/
@@ -2458,5 +2444,5 @@ mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = count,
   plot_annotation(tag_levels = "a")+
   plot_layout(guides = "collect")
 
-# ggsave(filename = "generalist_counts.jpeg", width = 8,
+# ggsave(filename = "generalist_counts_adj.jpeg", width = 8,
 #        height = 6, units = "in", dpi = 600)
