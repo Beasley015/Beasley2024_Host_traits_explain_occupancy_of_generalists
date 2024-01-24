@@ -204,10 +204,10 @@ ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
 n.host <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
   # Comment the following to aggregate I.scapularis:
-  mutate(Species = case_when(Genus == "Ixodes" &
-                               Species == "scapularis" ~
-                               paste(Species, Other, sep = "_"),
-                             TRUE ~ Species)) %>%
+  # mutate(Species = case_when(Genus == "Ixodes" &
+  #                              Species == "scapularis" ~
+  #                              paste(Species, Other, sep = "_"),
+  #                            TRUE ~ Species)) %>%
   select(Abbrev, Order, Family, Genus, Species) %>%
   distinct() %>% 
   filter(Order != "" & is.na(Order)==F) %>%
@@ -1516,7 +1516,7 @@ veg2 <- ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
   geom_point()+
   geom_errorbar(aes(ymin = lo, ymax = hi))+
   geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 7, color = sig), shape = 8)+
+  geom_point(aes(x = rownames(a1s), y = 4.5, color = sig), shape = 8)+
   scale_color_manual(values = c("white", "black"))+
   labs(x = "Ectoparasite Species", y = "Grass/Forb Coefficient")+
   theme_bw()+
@@ -1531,7 +1531,7 @@ veg2 <- ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
 (veg1/veg2) + 
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "vegplts.jpeg", width = 10, height = 6,
+# ggsave(filename = "vegplts_mesosdisagg.jpeg", width = 10, height = 6,
 #        units = "in", dpi = 600)
 
 # Host abundance
@@ -1824,8 +1824,8 @@ c2_plot <- ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
 (c1_plt / c2_plot)+
   plot_annotation(tag_levels = "a")
 
-ggsave(filename = "detcovs.jpeg", width = 10, height = 8, units = "in",
-       dpi = 600)
+ggsave(filename = "detcovs_iscapagg.jpeg", width = 10, height = 8, 
+       units = "in", dpi = 600)
 
 # Bayesian r-squared ---------------------
 # Calculation for model variance
@@ -1894,7 +1894,13 @@ site.df <- data.frame(Ecto = ecto.specs, site.r2 = mean.site.r2,
 
 # Get family and order names for each species
 site.df <- site.df %>%
-  left_join(n.host, by = c("Ecto" = "ecto"))
+  left_join(n.host, by = c("Ecto" = "ecto")) %>%
+  mutate(Order = case_when(startsWith(Ecto, "Ixodes") ~ "Ixodida",
+                           TRUE ~ Order)) %>%
+  mutate(hosts = as.numeric(hosts)) %>%
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 5,
+                           Ecto == "Ixodes_scapularis_nymph" ~ 5,
+                           TRUE ~ hosts))
 
 # If counting host by subfamily:
 # site.df <- site.df %>%
@@ -2026,9 +2032,9 @@ summary(lm(data = abund.hosts, log(Abund)~hosts))
 pele.necto <- mecto.clean %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
   #Comment this line to keep Iscap aggregated:
-  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
-                            paste(Ecto, Other, sep = "_"),
-                          TRUE ~ Ecto)) %>%
+  # mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+  #                           paste(Ecto, Other, sep = "_"),
+  #                         TRUE ~ Ecto)) %>%
   select(Site, Day, Tag, HostName, Ecto) %>%
   filter(HostName == "P . leucopus") %>%
   left_join(comp.frame[,c("pc1", "Site","Habitat")], by = "Site") %>%
@@ -2063,7 +2069,7 @@ pele.plt <- ggplot(data = pele.necto, aes(x = pc1, y = necto))+
   theme_bw()+
   theme(panel.grid = element_blank())
 
-# ggsave(filename = "pele_infest.jpeg", width = 5, height = 3,
+# ggsave(filename = "pele_infest_iscapagg.jpeg", width = 5, height = 3,
 #        units = "in", dpi = 600)
    
 # T. striatus captured ectos --------------
@@ -2071,9 +2077,9 @@ pele.plt <- ggplot(data = pele.necto, aes(x = pc1, y = necto))+
 tast.necto <- mecto.clean %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
   #Comment this line to keep Iscap aggregated:
-  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
-                            paste(Ecto, Other, sep = "_"),
-                          TRUE ~ Ecto)) %>%
+  # mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+  #                           paste(Ecto, Other, sep = "_"),
+  #                         TRUE ~ Ecto)) %>%
   dplyr::select(Site, Day, Tag, HostName, Ecto) %>%
   filter(HostName == "T . striatus")  %>%
   left_join(comp.frame[,c("pc1", "Site")], by = "Site") %>%
@@ -2132,7 +2138,7 @@ rownames(props) <- ecto.habs$Ecto
 (pele.plt|tast.plt) +
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "infest_both.jpeg", width = 7, height = 3, 
+# ggsave(filename = "infest_both.jpeg", width = 7, height = 3,
 #        units = "in", dpi = 600)
 
 # B brevicauda captured ectos ------------
@@ -2298,7 +2304,7 @@ MMRR(host.dist, list(vegdist))
 MMRR(ecto.dist, list(vegdist, eucdist, host.dist))
 # No spatial autocorrelation
 
-# Playing more with data ------------------------
+# Counts by habitat ------------------------
 parasite.frame <- mecto.clean %>%
   filter(is.na(Order) == F) %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
@@ -2331,6 +2337,7 @@ ggplot(host.all, aes(x = Abbrev, y = count, fill = Habitat))+
 # ggsave(filename = "hostcounts.jpeg", width = 10,
 #        height = 3, units = "in", dpi = 600)
 
+# O. leucopus
 orle.abund <- parasite.frame %>%
   filter(Ecto == "Orchopeas_leucopus") %>%
   group_by(Habitat, Abbrev) %>%
@@ -2357,6 +2364,7 @@ orle.fig <- ggplot(data = orle.all, aes(x = Abbrev, y = adj_count,
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
+# Larval I. scap
 iscl.abund <- parasite.frame %>%
   filter(Ecto == "Ixodes_scapularis_larva") %>%
   group_by(Habitat, Abbrev) %>%
@@ -2383,6 +2391,7 @@ iscl.fig <- ggplot(data = iscl.all, aes(x = Abbrev, y = adj_count,
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
+# Nymph iscap
 iscn.abund <- parasite.frame %>%
   filter(Ecto == "Ixodes_scapularis_nymph") %>%
   group_by(Habitat, Abbrev) %>%
@@ -2411,6 +2420,36 @@ iscn.fig <- ggplot(data = iscn.all,
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
+# All iscap
+isc.abund <- parasite.frame %>%
+  filter(Ecto == "Ixodes_scapularis") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%  
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+            by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("MIPE", "TAST", "ZAHU",
+                                            "PELE", "PEMA"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm", "Field", 
+                                              "Forest"))) %>%
+  ungroup()
+
+isc.all <- expand(isc.abund,Habitat,Abbrev)
+isc.all <- full_join(isc.abund, iscn.all)  
+
+isc.fig <- ggplot(data = isc.all, 
+                   aes(x = Abbrev, y = adj_count,
+                       fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 12)+
+  theme(panel.grid = element_blank())
+
+# Megabothris quirini
 mequ.abund <- parasite.frame %>%
   filter(Ecto == "Megabothris_quirini") %>%
   group_by(Habitat, Abbrev) %>%
@@ -2422,7 +2461,7 @@ mequ.abund <- parasite.frame %>%
   mutate(adj_count = ecto.prop/prop) %>%
   ungroup() %>%
   mutate(Abbrev = factor(Abbrev, levels = c("MIPE", "PELE", "ZAHU",
-                                              "MYGA", "NAIN",
+                                              #"MYGA", "NAIN",
                                             "PEMA"))) %>%
   mutate(Habitat = factor(Habitat, levels = c("Farm", "Field", 
                                                 "Forest"))) %>%
@@ -2439,10 +2478,16 @@ mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = adj_count,
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
 
+# ggsave(plot = mequ.fig, filename = "mequ_counts_adj.jpeg", 
+#        width = 4, height = 3, units = "in", dpi = 600)
+
 (iscl.fig + iscn.fig)/
-  (orle.fig+mequ.fig) +
+  (orle.fig + mequ.fig) +
   plot_annotation(tag_levels = "a")+
   plot_layout(guides = "collect")
 
-# ggsave(filename = "generalist_counts_adj.jpeg", width = 8,
-#        height = 6, units = "in", dpi = 600)
+ggsave(filename = "generalist_counts_adj.jpeg", width = 10,
+       height = 6, units = "in", dpi = 600)
+
+# ggsave(plot = isc.fig, filename = "isc_counts_adj.jpeg", width = 4,
+#        height = 3, units = "in", dpi = 600)
