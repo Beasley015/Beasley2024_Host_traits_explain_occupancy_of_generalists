@@ -319,7 +319,7 @@ ggplot(data = rich, aes(x = Mamm.rich, y = ecto.rich))+
 mecto.clean <- mamm.ecto %>%
   filter(!(SampleNo. != "" & is.na(Species) == T)) %>%
   # Include this line to filter "rare" hosts (<10 individuals):
-  filter(!(Abbrev %in% c("NAIN", "MYGA"))) %>%
+  # filter(!(Abbrev %in% c("NAIN", "MYGA"))) %>%
   filter(Tag != "RECAP" & Tag != "DESC")
 
 # Select columns and add occupancy column
@@ -692,10 +692,10 @@ inits <- function(){
 
 # Load model
 # model <- readRDS("ectomod.rds")
-# model <- readRDS("sansabund.rds")
+model <- readRDS("sansabund.rds")
 # model <- readRDS("mesos_agg.rds")
 # model <- readRDS("iscap_agg.rds")
-model <- readRDS("sansrarehosts.rds")
+# model <- readRDS("sansrarehosts.rds")
 
 # Model selection: site ------------------------
 # Full model
@@ -1495,7 +1495,8 @@ veg1 <- ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Leaf Litter Coefficient")+
   theme_bw()+
-  theme(axis.text.x = element_blank(), axis.title.x = element_blank(),
+  theme(#axis.text.x = element_blank(), 
+    axis.title.x = element_blank(),
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
@@ -1824,8 +1825,8 @@ c2_plot <- ggplot(data = c2s, aes(x = rownames(c2s), y = mean))+
 (c1_plt / c2_plot)+
   plot_annotation(tag_levels = "a")
 
-ggsave(filename = "detcovs_iscapagg.jpeg", width = 10, height = 8, 
-       units = "in", dpi = 600)
+# ggsave(filename = "detcovs_iscapagg.jpeg", width = 10, height = 8, 
+#        units = "in", dpi = 600)
 
 # Bayesian r-squared ---------------------
 # Calculation for model variance
@@ -2304,7 +2305,7 @@ MMRR(host.dist, list(vegdist))
 MMRR(ecto.dist, list(vegdist, eucdist, host.dist))
 # No spatial autocorrelation
 
-# Counts by habitat ------------------------
+# Counts of generalists by habitat ------------------------
 parasite.frame <- mecto.clean %>%
   filter(is.na(Order) == F) %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
@@ -2461,7 +2462,7 @@ mequ.abund <- parasite.frame %>%
   mutate(adj_count = ecto.prop/prop) %>%
   ungroup() %>%
   mutate(Abbrev = factor(Abbrev, levels = c("MIPE", "PELE", "ZAHU",
-                                              #"MYGA", "NAIN",
+                                              "MYGA", "NAIN",
                                             "PEMA"))) %>%
   mutate(Habitat = factor(Habitat, levels = c("Farm", "Field", 
                                                 "Forest"))) %>%
@@ -2486,8 +2487,69 @@ mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = adj_count,
   plot_annotation(tag_levels = "a")+
   plot_layout(guides = "collect")
 
-ggsave(filename = "generalist_counts_adj.jpeg", width = 10,
-       height = 6, units = "in", dpi = 600)
+# ggsave(filename = "generalist_counts_adj.jpeg", width = 10,
+#        height = 6, units = "in", dpi = 600)
 
 # ggsave(plot = isc.fig, filename = "isc_counts_adj.jpeg", width = 4,
 #        height = 3, units = "in", dpi = 600)
+
+# C. pseudagyrtes
+ctps.abund <- parasite.frame %>%
+  filter(Ecto == "Ctenophthalmus_pseudagyrtes") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+            by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("PELE", "PEMA",
+                                            "TAST", "MIPE"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm","Field",
+                                              "Forest")))
+
+ctps.all <- expand(ctps.abund,Habitat,Abbrev)
+ctps.all <- full_join(ctps.abund, ctps.all)  
+
+ctps.fig <- ggplot(data = ctps.all, aes(x = Abbrev, y = adj_count, 
+                                        fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 12)+
+  theme(panel.grid = element_blank())
+
+# Mesostigmata
+meso.abund <- parasite.frame %>%
+  filter(Ecto == "Unknown Mesostigmata_") %>%
+  group_by(Habitat, Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(ecto.prop = count/sum(count)) %>%
+  ungroup() %>%
+  left_join(dplyr::select(host.props,-count), 
+            by = c("Abbrev", "Habitat")) %>%
+  mutate(adj_count = ecto.prop/prop) %>%
+  ungroup() %>%
+  mutate(Abbrev = factor(Abbrev, levels = c("PELE", "ZAHU",
+                                            "BLBR", "MIPE"))) %>%
+  mutate(Habitat = factor(Habitat, levels = c("Farm","Field",
+                                              "Forest")))
+
+meso.all <- expand(meso.abund,Habitat,Abbrev)
+meso.all <- full_join(meso.abund, meso.all)  
+
+meso.fig <- ggplot(data = meso.all, aes(x = Abbrev, y = adj_count, 
+                                        fill = Habitat))+
+  geom_col(position = "dodge")+
+  labs(x = "Host Species", y = "Adjusted Count")+
+  scale_fill_viridis_d(end = 0.9)+
+  theme_bw(base_size = 12)+
+  theme(panel.grid = element_blank())
+  
+(ctps.fig + meso.fig)+
+  plot_annotation(tag_levels = "a")+
+  plot_layout(guides = "collect")
+
+# ggsave(filename = "generalist_counts_4host_adj.jpeg", width = 10,
+#        height = 6, units = "in", dpi = 600)
