@@ -23,6 +23,7 @@ library(rstatix)
 library(patchwork)
 library(sf)
 library(terra)
+library(betapart)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -2030,17 +2031,23 @@ summary(lm(data = abund.hosts, log(Abund)~hosts))
 
 # P. leucopus captured ectos --------
 # Get parasite counts
-pele.necto <- mecto.clean %>%
+pele.ecto <- mecto.clean %>%
   unite(col = "Ecto", Genus, Species, sep = "_", na.rm = T) %>%
   #Comment this line to keep Iscap aggregated:
-  # mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
-  #                           paste(Ecto, Other, sep = "_"),
-  #                         TRUE ~ Ecto)) %>%
+  mutate(Ecto = case_when(Ecto == "Ixodes_scapularis" ~
+                            paste(Ecto, Other, sep = "_"),
+                          TRUE ~ Ecto)) %>%
   select(Site, Day, Tag, HostName, Ecto) %>%
   filter(HostName == "P . leucopus") %>%
   left_join(comp.frame[,c("pc1", "Site","Habitat")], by = "Site") %>%
   mutate(Ecto = case_when(Ecto == "" ~ NA,
-                          TRUE ~ Ecto)) %>%
+                          TRUE ~ Ecto)) 
+
+counts_by_hab <- pele.ecto %>%
+  group_by(Ecto, Habitat) %>%
+  summarise(count = length(na.omit(Ecto)))
+
+pele.necto <- pele.ecto %>%
   group_by(Tag, pc1) %>%
   summarise(necto = length(na.omit(Ecto))) 
 
@@ -2553,3 +2560,79 @@ meso.fig <- ggplot(data = meso.all, aes(x = Abbrev, y = adj_count,
 
 # ggsave(filename = "generalist_counts_4host_adj.jpeg", width = 10,
 #        height = 6, units = "in", dpi = 600)
+
+# Structural specificity of the above -------------------
+host.prop <- mecto.clean %>%
+  select(Site, Tag, Abbrev) %>%
+  distinct() %>%
+  left_join(select(veg.site, Site, Habitat), by = "Site") %>%
+  group_by(Abbrev) %>%
+  summarise(count = n()) %>%
+  mutate(prop = count/sum(count)) %>%
+  ungroup()
+
+generalists <- c("Ctenophthalmus_pseudagyrtes", "Orchopeas_leucopus",
+                 "Ixodes_scapularis_larva", "Megabothris_quirini",
+                 "Ixodes_scapularis_nymph", "Unknown Mesostigmata_")
+
+generalist_frame <- parasite.frame %>%
+  filter(Ecto %in% generalists) %>%
+  select(-Habitat) %>%
+  group_by(Ecto, Abbrev) %>%
+  summarise(n_per_host = n()) %>%
+  left_join(host.prop, by = c("Abbrev")) %>%
+  mutate(n_adj = n_per_host/prop) %>%
+  select(-c(n_per_host, count, prop)) %>%
+  pivot_wider(names_from = Abbrev, values_from = n_adj, 
+              values_fill = 0)
+
+# From R evenness package; not available on CRAN
+bulla <- function(x, zeroes=TRUE) {
+  if(!zeroes){
+    x[x > 0]
+  }
+  
+  # Species richness (number of species)
+  S <- length(x[x>0])
+  
+  # Relative abundances
+  p <- x/sum(x)
+  
+  O <- sum(pmin(p, 1/S))
+  
+  # Bulla's Evenness
+  (O - 1/S)/(1 - 1/S)
+}
+
+bullas <- apply(generalist_frame[,-1], 1, bulla)
+
+index_frame <- data.frame(Ecto=generalist_frame[,1], 
+                    bulla_index = bullas) #%>%
+  #arrange(desc(bulla_index))
+print(index_frame)
+
+# Host beta-specificity to back up above analysis --------------
+gens_habitat <-parasite.frame %>%
+  filter(Ecto %in% generalists) %>%
+  group_by(Ecto, Habitat, Abbrev) %>%
+  summarise(n_per_host = n()) %>%
+  left_join(host.prop, by = c("Abbrev")) %>%
+  mutate(n_adj = n_per_host/prop) %>%
+  select(-c(n_per_host, count, prop)) %>%
+  pivot_wider(names_from = Abbrev, values_from = n_adj, 
+              values_fill = 0)
+
+generalists <- unique(gens_habitat$Ecto)
+betaspec.out <- logical()
+
+for(i in 1:length(generalists)){
+  smol <- filter(gens_habitat, Ecto == generalists[[i]])[,-c(1:2)]
+
+  turnover <- beta.multi.abund(smol, index.family = "bray")
+  
+  betaspec.out[i] <- turnover[[3]]
+}
+
+index_frame$beta <- betaspec.out
+
+#write.table(index_frame, file="specialization_indices.csv")
