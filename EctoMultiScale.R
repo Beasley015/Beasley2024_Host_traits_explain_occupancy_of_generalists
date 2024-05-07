@@ -53,6 +53,24 @@ mamm.2020 <- mamm.raw %>%
   mutate(Genus = paste(substr(Genus, start = 1, stop = 1), ".")) %>%
   unite(col = HostName, Genus, Species, sep = " ") 
 
+# hosts per site
+hpersite <- mamm.2020 %>%
+  select(Site, Abbrev, Tag) %>%
+  distinct() %>%
+  select(-Tag) %>%
+  group_by(Site, Abbrev) %>%
+  summarise(count = n()) %>%
+  pivot_wider(names_from = Site, values_from = count,
+              values_fill = 0)
+
+# write.csv(hpersite, file = "hpersite.csv")
+
+# Hosts captured more than once
+mamm.2020 %>%
+  group_by(Tag) %>%
+  summarise(ncap = n()) %>%
+  filter(ncap > 1)
+
 # Ectos 
 ecto.clean <- ecto.raw %>%
   filter(Other != "Springtail?") %>%
@@ -87,31 +105,6 @@ mamm.ecto <- mamm.2020 %>%
   #                            "Unknown Mesostigmata",
   #                          TRUE ~ Genus))
 
-# Mammal summary stats and early tables/figures ------------------
-# Number of mammal species
-length(unique(mamm.ecto$Abbrev))
-
-# Individuals per mammal species
-mamm.abund <- mamm.2020 %>%
-  distinct_at(.vars = vars(Site, Abbrev, Tag), .keep_all = T) %>%
-  group_by(HostName) %>%
-  summarise(Count = n()) 
-
-# Create rank-abundance figure
-mamm.abund$SpecName <- reorder(mamm.abund$HostName, -mamm.abund$Count)
-
-ggplot(data = mamm.abund, aes(x = HostName, y = Count))+
-  geom_col(fill = "light gray", color = "black")+
-  scale_y_continuous(expand = c(0,0), 
-                     limits = c(0, max(mamm.abund$Count+10)))+
-  labs(x = "Species", y = "Abundance")+
-  theme_bw(base_size = 12)+
-  theme(panel.grid = element_blank(), 
-        axis.text.x = element_text(angle = 45, vjust = 1,
-                                   hjust = 1))
-
-# ggsave("MammAbund.jpeg", width = 4, height = 3, units = "in")
-
 # Parasite summary and tables/figures -----------------------
 # Number of ectoparasite orders
 length(unique(ecto.clean$Order))
@@ -128,15 +121,6 @@ ecto.abund <- mamm.ecto %>%
   group_by(Order) %>%
   summarise(Count = n()) 
 # So many fleas
-
-ggplot(data = ecto.abund, aes(x = Order, y = Count))+
-  geom_col()+
-  labs(y = "Abundance")+
-  theme_bw(base_size = 18)+
-  theme(panel.grid = element_blank())
-
-# ggsave(filename = "ectoabund.jpg", width = 7, height = 4.5,
-#        units = "in")
 
 # table <- mamm.ecto %>%
 #   filter(is.na(Order) == F & Order != "") %>%
@@ -164,7 +148,7 @@ ggplot(data = mamm.prev, aes(x = HostName, y = Prevalence))+
 # ggsave(filename = "MammPrev.jpeg", width = 4, height = 3, 
 #        units = "in")
 
-# Avg. load per capture event per species
+# Avg. intensity per capture event per species
 mamm.load <- mamm.ecto %>%
   group_by(HostName, SampleNo.) %>%
   filter(SampleNo. != "") %>%
@@ -172,7 +156,7 @@ mamm.load <- mamm.ecto %>%
 
 ggplot(data = mamm.load, aes(x = ecto))+
   geom_bar(color = "black", fill = "lightgray")+
-  labs(x = "Parasite Load", y = "Number of Samples")+
+  labs(x = "Parasite Intensity", y = "Number of Samples")+
   scale_x_continuous(expand = c(0,0), breaks = seq(0,10,1))+
   scale_y_continuous(expand = c(0,0), limits = c(0, 200))+
   theme_bw(base_size = 14)+
@@ -183,6 +167,11 @@ ggplot(data = mamm.load, aes(x = ecto))+
 # Raster of parasite specs present on host specs
 mamm.raster <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
+  # Comment the following to aggregate I. scapularis:
+  mutate(Species = case_when(Genus == "Ixodes" &
+                               Species == "scapularis" ~
+                               paste(Species, Other, sep = "_"),
+                             TRUE ~ Species)) %>%
   select(Abbrev, Order, Family, Genus, Species) %>%
   group_by(Abbrev) %>%
   distinct() %>% 
@@ -190,6 +179,7 @@ mamm.raster <- mamm.ecto %>%
   unite(ecto, Genus, Species) %>%
   mutate(Occ = 1)
 
+# This figure didn't make it to the manuscript, but I like it
 ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
   geom_raster(aes(fill = Order))+
   scale_fill_viridis_d(limits = c("Siphonaptera", "Ixodida",
@@ -200,31 +190,6 @@ ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
 
 # ggsave("ectosraster.jpeg", height = 4, width = 8.5,
 #        units = "in")
-
-# Hosts per ecto species
-n.host <- mamm.ecto %>%
-  filter(SampleNo. != "") %>%
-  # Comment the following to aggregate I.scapularis:
-  # mutate(Species = case_when(Genus == "Ixodes" &
-  #                              Species == "scapularis" ~
-  #                              paste(Species, Other, sep = "_"),
-  #                            TRUE ~ Species)) %>%
-  select(Abbrev, Order, Family, Genus, Species) %>%
-  distinct() %>% 
-  filter(Order != "" & is.na(Order)==F) %>%
-  unite(ecto, Genus, Species) %>%
-  group_by(Order, Family, ecto) %>%
-  summarise(hosts = n())
-
-ggplot(data = n.host, aes(x = hosts, fill = Order))+
-  geom_bar(color = "black")+
-  scale_fill_manual(values = gray.colors(n = 5, end = 0.85,
-                                         start = 0.05))+
-  labs(x = "Number of Hosts", y = "Number of Parasite Species")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-# ggsave("NumOfHosts.jpeg")
 
 # by host subfamily:
 n.host.sub <- mamm.ecto %>%
@@ -249,16 +214,6 @@ n.host.sub <- mamm.ecto %>%
   group_by(Order, Family, ecto) %>%
   summarise(hosts = n())
 
-ggplot(data = n.host.sub, aes(x = hosts, fill = Order))+
-  geom_bar(color = "black")+
-  scale_fill_manual(values = gray.colors(n = 5, end = 0.85,
-                                         start = 0.05))+
-  labs(x = "Number of Hosts", y = "Number of Parasite Species")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-# ggsave("hostsubfam.jpeg")
-
 # by host family:
 n.host.fam <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
@@ -280,16 +235,6 @@ n.host.fam <- mamm.ecto %>%
   unite(ecto, Genus, Species) %>%
   group_by(Order, Family, ecto) %>%
   summarise(hosts = n())
-
-ggplot(data = n.host.fam, aes(x = hosts, fill = Order))+
-  geom_bar(color = "black")+
-  scale_fill_manual(values = gray.colors(n = 5, end = 0.85,
-                                         start = 0.05))+
-  labs(x = "Number of Hosts", y = "Number of Parasite Species")+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-# ggsave("nhostfam.jpeg")
 
 # Test host richness/parasite richness relationship
 rich <- mamm.ecto %>%
@@ -314,6 +259,147 @@ ggplot(data = rich, aes(x = Mamm.rich, y = ecto.rich))+
   theme(panel.grid = element_blank())
 
 # ggsave("hostectorich.jpeg", width = 5, height = 3, units = "in")
+
+# Map --------------
+transects <- st_read(dsn = "UpdatedTracks.kml") %>%
+  filter(Name %in% c("Hort2", "Hort3", "Audubon1", "Audubon2",
+                     "Inter1","Inter2", "StM1", "StM2",
+                     "Jericho1", "Jericho2")) %>%
+  left_join(distinct(select(mamm.raw, Habitat, Site)), 
+            by = c("Name"="Site")) %>%
+  filter(!(Name %in% c("Jericho2", "Jericho1") 
+           & Habitat=="Farm")) %>%
+  st_cast(., to = "POINT") 
+
+transects <- st_cast(transects, "POINT", 
+                     group_or_split = FALSE) %>%
+  st_as_sf(transects) %>%
+  distinct(Name, .keep_all = T)
+
+chittenden <- map_data(map="county") %>%
+  filter(region == "vermont" & subregion == "chittenden")
+
+vt <- map_data(database = 'county', regions = 'vermont') %>%
+  mutate(color = "lightgray") %>%
+  mutate(color = case_when(subregion == "chittenden"~"red4",
+                           TRUE ~ color))
+
+transect_map <- ggplot(data=chittenden, aes(x=long, y=lat))+
+  geom_polygon(fill="lightgray", color="black") +
+  geom_sf(data=transects$geometry, inherit.aes = F, size=4,
+          aes(fill=transects$Habitat), pch=21)+
+  scale_fill_viridis_d(end = 0.9, name="Habitat")+
+  theme_bw()+
+  theme(axis.title = element_blank())
+
+vt_map <- ggplot(data=vt, aes(x=long, y=lat, fill=subregion))+
+  geom_polygon(color='black')+
+  scale_fill_manual(breaks=vt$subregion,values = vt$color)+
+  theme_bw()+
+  theme(axis.title=element_blank(), legend.position = "none",
+        panel.grid=element_blank(), axis.text = element_blank())
+
+
+# Play with this so it looks good:
+transect_map + 
+  inset_element(vt_map, left = 0, bottom = 0.75, right = 0.25,
+                top = 1) 
+
+# ggsave(filename="sitemap.jpeg", width = 6, height = 6, units="in",
+#        dpi = 600)
+
+# Check for spatial autocorrelation---------------
+# Build the data frame
+trap.df <- data.frame(st_coordinates(st_cast(transects$geometry,"POINT"))) %>%
+  select(-"Z") %>%
+  mutate("Site" = transects$Name)
+  
+# Add habitat
+trap.df <- trap.df %>%
+  left_join(y=select(veg.site, Site, Habitat), 
+            by = "Site")
+
+# Use MMRR to check for spatial autocorrelation
+# If autocorrelated, geographic distance will be sig predictor
+
+vegdist <- as.matrix(dist(comp.cov1,upper = T))
+
+trap.xy <- trap.df[,1:2]
+eucdist <- as.matrix(dist(trap.xy, upper = T))
+
+mamm.counts <- mamm.2020 %>%
+  distinct_at(.vars = vars(Site, Abbrev, Tag), .keep_all = T) %>%
+  group_by(HostName, Site) %>%
+  summarise(Count = n()) %>%
+  pivot_wider(names_from=HostName, values_from=Count,
+              values_fill = 0) %>%
+  arrange(Site)
+
+host.dist <- as.matrix(dist(mamm.counts[,-1]))
+
+ecto.dist <- as.matrix(dist(sitemax, upper = T))
+
+MMRR<-function(Y,X,nperm=999){
+  #compute regression coefficients and test statistics
+  nrowsY<-nrow(Y)
+  y<-unfold(Y)
+  if(is.null(names(X)))names(X)<-paste("X",1:length(X),sep="")
+  Xmats<-sapply(X,unfold)
+  fit<-lm(y~Xmats)
+  coeffs<-fit$coefficients
+  summ<-summary(fit)
+  r.squared<-summ$r.squared
+  tstat<-summ$coefficients[,"t value"]
+  Fstat<-summ$fstatistic[1]
+  tprob<-rep(1,length(tstat))
+  Fprob<-1
+  
+  #perform permutations
+  for(i in 1:nperm){
+    rand<-sample(1:nrowsY)
+    Yperm<-Y[rand,rand]
+    yperm<-unfold(Yperm)
+    fit<-lm(yperm~Xmats)
+    summ<-summary(fit)
+    Fprob<-Fprob+as.numeric(summ$fstatistic[1]>=Fstat)
+    tprob<-tprob+as.numeric(abs(summ$coefficients[,"t value"])>=abs(tstat))
+  }
+  
+  #return values
+  tp<-tprob/(nperm+1)
+  Fp<-Fprob/(nperm+1)
+  names(r.squared)<-"r.squared"
+  names(coeffs)<-c("Intercept",names(X))
+  names(tstat)<-paste(c("Intercept",names(X)),"(t)",sep="")
+  names(tp)<-paste(c("Intercept",names(X)),"(p)",sep="")
+  names(Fstat)<-"F-statistic"
+  names(Fp)<-"F p-value"
+  return(list(r.squared=r.squared,
+              coefficients=coeffs,
+              tstatistic=tstat,
+              tpvalue=tp,
+              Fstatistic=Fstat,
+              Fpvalue=Fp))
+}
+
+# unfold converts the lower diagonal elements of a matrix into a vector
+# unfold is called by MMRR
+
+unfold<-function(X){
+  x<-vector()
+  for(i in 2:nrow(X)) x<-c(x,X[i,1:i-1])
+  return(x)
+}
+
+# Check for independence between x values
+MMRR(vegdist, list(eucdist)) 
+MMRR(host.dist, list(eucdist))
+MMRR(host.dist, list(vegdist))
+# We good
+
+# Test for autocorrelation
+MMRR(ecto.dist, list(vegdist, eucdist, host.dist))
+# No spatial autocorrelation
 
 # Prepping data for MSOM ----------------------
 # Clean data
@@ -417,7 +503,11 @@ veg.site <- veg.2020 %>%
   group_by(Site, Habitat) %>%
   summarise(across(.cols = c(Canopy:X.DeadVeg), mean, na.rm = T))
 
+full.pc <- prcomp(veg.site[,-c(1:2)])
 comp.pc <- prcomp(veg.site[,10:15])
+
+# write.table(full.pc$rotation, file = "fullpcloadings.csv", 
+#             sep = ",")
 
 comp.cov1 <- comp.pc$x[,1]
 comp.cov1 <- as.vector(scale(comp.cov1))
@@ -693,10 +783,13 @@ inits <- function(){
 
 # Load model
 # model <- readRDS("ectomod.rds")
-model <- readRDS("sansabund.rds")
+# model <- readRDS("sansabund.rds")
 # model <- readRDS("mesos_agg.rds")
 # model <- readRDS("iscap_agg.rds")
 # model <- readRDS("sansrarehosts.rds")
+
+# Figures of markov chains
+# traceplot(model, varname = "c2")
 
 # Model selection: site ------------------------
 # Full model
@@ -1496,8 +1589,8 @@ veg1 <- ggplot(data = a1s, aes(x = rownames(a1s), y = mean))+
   geom_hline(yintercept = 0)+
   labs(x = "Ectoparasite Species", y = "Leaf Litter Coefficient")+
   theme_bw()+
-  theme(#axis.text.x = element_blank(), 
-    axis.title.x = element_blank(),
+  theme(axis.text.x = element_blank(), 
+    axis.title.x = element_blank(), 
         panel.grid = element_blank(), legend.position = "None",
         plot.margin = unit(c(5.5,5.5,5.5,60), "pt"))
 
@@ -1533,30 +1626,30 @@ veg2 <- ggplot(data = a2s, aes(x = rownames(a2s), y = mean))+
 (veg1/veg2) + 
   plot_annotation(tag_levels = "a")
 
-# ggsave(filename = "vegplts_mesosdisagg.jpeg", width = 10, height = 6,
-#        units = "in", dpi = 600)
+# ggsave(filename = "vegplts_mesosdisagg.jpeg", width = 10, 
+#        height = 6, units = "in", dpi = 600)
 
 # Host abundance
-a3 <- model$BUGSoutput$sims.list$a3
-
-a3s <- data.frame(mean = apply(a3, 2, mean),
-                  lo = apply(a3, 2, quantile, 0.125),
-                  hi = apply(a3, 2, quantile, 0.875)) %>%
-  mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
-                         TRUE ~ ""))
-rownames(a3s) <- colnames(site.occ)[-c(1)]
-
-ggplot(data = a3s, aes(x = rownames(a3s), y = mean))+
-  geom_point()+
-  geom_errorbar(aes(ymin = lo, ymax = hi))+
-  geom_hline(yintercept = 0)+
-  geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
-  scale_color_manual(values = c("white", "black"))+
-  labs(x = "Ectoparasite Species", y = "Host Abundance")+
-  theme_bw()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   hjust = 1.1),
-        panel.grid = element_blank(), legend.position = "None")
+# a3 <- model$BUGSoutput$sims.list$a3
+# 
+# a3s <- data.frame(mean = apply(a3, 2, mean),
+#                   lo = apply(a3, 2, quantile, 0.125),
+#                   hi = apply(a3, 2, quantile, 0.875)) %>%
+#   mutate(sig = case_when(lo > 0 | hi < 0 ~ "Yes",
+#                          TRUE ~ ""))
+# rownames(a3s) <- colnames(site.occ)[-c(1)]
+# 
+# ggplot(data = a3s, aes(x = rownames(a3s), y = mean))+
+#   geom_point()+
+#   geom_errorbar(aes(ymin = lo, ymax = hi))+
+#   geom_hline(yintercept = 0)+
+#   geom_point(aes(x = rownames(a1s), y = 1.5, color = sig), shape = 8)+
+#   scale_color_manual(values = c("white", "black"))+
+#   labs(x = "Ectoparasite Species", y = "Host Abundance")+
+#   theme_bw()+
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+#                                    hjust = 1.1),
+#         panel.grid = element_blank(), legend.position = "None")
 
 # ggsave(filename = "hostabund_75_interac.jpeg", width = 9, 
 #        height = 4, units = "in")
@@ -1900,7 +1993,7 @@ site.df <- site.df %>%
   mutate(Order = case_when(startsWith(Ecto, "Ixodes") ~ "Ixodida",
                            TRUE ~ Order)) %>%
   mutate(hosts = as.numeric(hosts)) %>%
-  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 5,
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 4,
                            Ecto == "Ixodes_scapularis_nymph" ~ 5,
                            TRUE ~ hosts))
 
@@ -1911,19 +2004,6 @@ site.df <- site.df %>%
 # If counting host by family:
 # site.df <- site.df %>%
 #   left_join(n.host.fam, by = c("Ecto" = "ecto"))
-
-# full fig
-site.r2.fig <- ggplot(data = site.df, aes(x = Order, 
-                                        y = site.r2))+
-  geom_boxplot(fill = "lightgray", outlier.shape = NA)+
-  # geom_jitter(aes(color = Order))+
-  scale_color_viridis_d(end = 0.95)+
-  labs(y = bquote("Site"~R^2))+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank(), legend.position = "none")
-
-# ggsave(filename = "siter2_order_full.jpeg", height = 4, width = 6,
-#        units = "in", dpi = 600)
 
 # Host-level r-squared
 mean.host.r2 <- apply(host.r2, 1, mean, na.rm = T)
@@ -1946,27 +2026,9 @@ host.df <- host.df %>%
   mutate(Order = case_when(startsWith(Ecto, "Ixodes") ~ "Ixodida",
                            TRUE ~ Order)) %>%
   mutate(hosts = as.numeric(hosts)) %>%
-  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 5,
+  mutate(hosts = case_when(Ecto == "Ixodes_scapularis_larva" ~ 4,
                            Ecto == "Ixodes_scapularis_nymph" ~ 5,
                            TRUE ~ hosts))
-
-# Final fig
-host.r2.fig <- ggplot(data = host.df, aes(x = Order, y = host.r2))+
-  geom_boxplot(fill = 'lightgray', outlier.shape = NA)+
-  # geom_jitter(aes(color = Order))+
-  scale_color_viridis_d(end = 0.95)+
-  labs(y = bquote("Host"~R^2))+
-  theme_bw(base_size = 14)+
-  theme(panel.grid = element_blank())
-
-# ggsave(filename = "hostr2_order_full.jpeg", height = 4, width = 6,
-       # units = 'in', dpi = 600)
-
-r2fig <- site.r2.fig + host.r2.fig +
-  plot_annotation(tag_levels = "a")
-
-# ggsave(filename = "r2fig_rare.jpeg", height = 3, width = 10,
-#        units = 'in',dpi = 600)
 
 # R-squared vs. host specificity -------------------
 summary(lm(data = site.df, formula = hosts~site.r2))
@@ -2167,150 +2229,6 @@ blbr.necto <- mecto.clean %>%
   summarise(necto = length(na.omit(Ecto))) 
 
 # Only 2 parasites from BLBR; this will not work
-
-# Check for spatial autocorrelation/plot sites---------------
-traplines <- st_read("UpdatedTracks.kml")
-
-traplines <- st_crop(traplines, xmin = -73.4, xmax = -72.75, 
-                   ymin = 44.1, ymax = 44.6)
-
-# Convert to midpoints
-st_line_midpoints <- function(sf_lines = NULL){
-  
-  g <- st_geometry(sf_lines)
-  
-  g_mids <- lapply(g, function(x){
-    
-    coords <- as.matrix(x)
-    
-    # this is just a copypaste of View(maptools:::getMidpoints):
-    get_mids <- function (coords){
-      dist <- sqrt((diff(coords[, 1])^2 + (diff(coords[, 2]))^2))
-      dist_mid <- sum(dist)/2
-      dist_cum <- c(0, cumsum(dist))
-      end_index <- which(dist_cum > dist_mid)[1]
-      start_index <- end_index - 1
-      start <- coords[start_index, ]
-      end <- coords[end_index, ]
-      dist_remaining <- dist_mid - dist_cum[start_index]
-      mid <- start + (end - start) * (dist_remaining/dist[start_index])
-      return(mid)
-    }
-    
-    mids <- st_point(get_mids(coords))
-  })
-}
-trap.list <- st_line_midpoints(traplines)
-
-# Build the data frame
-trap.df <- as.data.frame(do.call(rbind, trap.list))
-names(trap.df) <- c("X", "Y")
-trap.df$Name <- traplines$Name
-
-# Add habitat
-trap.df <- trap.df %>%
-  left_join(y=select(veg.site, Site, Habitat), 
-            by = c("Name" = "Site"))
-
-# Plot it
-alldat <- map_data("county")
-
-chittenden <- alldat[alldat$region=="vermont" &
-                       alldat$subregion=="chittenden",]
-
-ggplot(data = chittenden, aes(x = long, y = lat, fill = Habitat))+
-  geom_polygon(color = "black", fill = "lightgray")+
-  geom_point(data = trap.df, aes(x = X, y = Y), 
-              size = 3, alpha = 0.6,
-              pch = 21, color = "black")+
-  scale_fill_viridis_d()+
-  # North arrow isn't working
-  # north()+
-  theme_classic(base_size = 14)+
-  theme(axis.title = element_blank(), axis.text = element_blank())
-
-# ggsave(file = "sitemap.jpeg", dpi = 600)
-
-# Use MMRR to check for spatial autocorrelation
-# If autocorrelated, geographic distance will be sig predictor
-
-vegdist <- as.matrix(dist(comp.cov1,upper = T))
-
-trap.xy <- trap.df[-11, 1:2]
-eucdist <- as.matrix(dist(trap.xy, upper = T))
-
-mamm.counts <- mamm.2020 %>%
-  distinct_at(.vars = vars(Site, Abbrev, Tag), .keep_all = T) %>%
-  group_by(HostName, Site) %>%
-  summarise(Count = n()) %>%
-  pivot_wider(names_from=HostName, values_from=Count,
-              values_fill = 0)
-
-host.dist <- as.matrix(dist(mamm.counts[,-1]))
-
-ecto.dist <- as.matrix(dist(sitemax, upper = T))
-
-MMRR<-function(Y,X,nperm=999){
-  #compute regression coefficients and test statistics
-  nrowsY<-nrow(Y)
-  y<-unfold(Y)
-  if(is.null(names(X)))names(X)<-paste("X",1:length(X),sep="")
-  Xmats<-sapply(X,unfold)
-  fit<-lm(y~Xmats)
-  coeffs<-fit$coefficients
-  summ<-summary(fit)
-  r.squared<-summ$r.squared
-  tstat<-summ$coefficients[,"t value"]
-  Fstat<-summ$fstatistic[1]
-  tprob<-rep(1,length(tstat))
-  Fprob<-1
-  
-  #perform permutations
-  for(i in 1:nperm){
-    rand<-sample(1:nrowsY)
-    Yperm<-Y[rand,rand]
-    yperm<-unfold(Yperm)
-    fit<-lm(yperm~Xmats)
-    summ<-summary(fit)
-    Fprob<-Fprob+as.numeric(summ$fstatistic[1]>=Fstat)
-    tprob<-tprob+as.numeric(abs(summ$coefficients[,"t value"])>=abs(tstat))
-  }
-  
-  #return values
-  tp<-tprob/(nperm+1)
-  Fp<-Fprob/(nperm+1)
-  names(r.squared)<-"r.squared"
-  names(coeffs)<-c("Intercept",names(X))
-  names(tstat)<-paste(c("Intercept",names(X)),"(t)",sep="")
-  names(tp)<-paste(c("Intercept",names(X)),"(p)",sep="")
-  names(Fstat)<-"F-statistic"
-  names(Fp)<-"F p-value"
-  return(list(r.squared=r.squared,
-              coefficients=coeffs,
-              tstatistic=tstat,
-              tpvalue=tp,
-              Fstatistic=Fstat,
-              Fpvalue=Fp))
-}
-
-# unfold converts the lower diagonal elements of a matrix into a vector
-# unfold is called by MMRR
-
-unfold<-function(X){
-  x<-vector()
-  for(i in 2:nrow(X)) x<-c(x,X[i,1:i-1])
-  return(x)
-}
-
-# Check for independence between x values
-MMRR(vegdist, list(eucdist)) 
-MMRR(host.dist, list(eucdist))
-MMRR(host.dist, list(vegdist))
-# We good
-
-# Test for autocorrelation
-MMRR(ecto.dist, list(vegdist, eucdist, host.dist))
-# No spatial autocorrelation
 
 # Counts of generalists by habitat ------------------------
 parasite.frame <- mecto.clean %>%
@@ -2543,6 +2461,9 @@ meso.abund <- parasite.frame %>%
   mutate(Habitat = factor(Habitat, levels = c("Farm","Field",
                                               "Forest")))
 
+parasite.frame %>%
+  filter(Ecto == "Androlaelaps_")
+
 meso.all <- expand(meso.abund,Habitat,Abbrev)
 meso.all <- full_join(meso.abund, meso.all)  
 
@@ -2572,8 +2493,8 @@ host.prop <- mecto.clean %>%
   ungroup()
 
 generalists <- c("Ctenophthalmus_pseudagyrtes", "Orchopeas_leucopus",
-                 "Ixodes_scapularis_larva", "Megabothris_quirini",
-                 "Ixodes_scapularis_nymph", "Unknown Mesostigmata_")
+                 "Ixodes_scapularis_larva", "Megabothris_quirini", 
+                 "Unknown Mesostigmata_", "Ixodes_scapularis_nymph")
 
 generalist_frame <- parasite.frame %>%
   filter(Ecto %in% generalists) %>%
@@ -2635,4 +2556,6 @@ for(i in 1:length(generalists)){
 
 index_frame$beta <- betaspec.out
 
-#write.table(index_frame, file="specialization_indices.csv")
+# write.table(index_frame, file="specialization_indices.csv",
+#             sep = ",")
+
