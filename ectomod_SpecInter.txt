@@ -1,0 +1,94 @@
+
+    model{
+    # Define hyperpriors
+    
+    mean.a0 ~ dunif(0,1)
+    a0.mean <- log(mean.a0)-log(1-mean.a0)
+    tau.a0 ~ dgamma(0.1, 0.1)
+    
+    mean.a1 ~ dunif(0,1)
+    a1.mean <- log(mean.a1)-log(1-mean.a1)
+    tau.a1 ~ dgamma(0.1, 0.1)
+    
+    mean.a2 ~ dunif(0,1)
+    a2.mean <- log(mean.a2)-log(1-mean.a2)
+    tau.a2 ~ dgamma(0.1, 0.1)
+    
+    mean.a3 ~ dunif(0,1)
+    a3.mean <- log(mean.a3)-log(1-mean.a3)
+    tau.a3 ~ dgamma(0.1, 0.1)
+    
+    mean.a4 ~ dunif(0,1)
+    a4.mean <- log(mean.a4)-log(1-mean.a4)
+    tau.a4 ~ dgamma(0.1, 0.1)
+    
+    mean.b0 ~ dunif(0,1)
+    b0.mean <- log(mean.b0)-log(1-mean.b0)
+    tau.b0 ~ dgamma(0.1, 0.1)
+    
+    mean.c0 ~ dunif(0,1)
+    c0.mean <- log(mean.c0)-log(1-mean.c0)
+    tau.c0 ~ dgamma(0.1, 0.1)
+    
+    mean.c1 ~ dunif(0,1)
+    c1.mean <- log(mean.c1)-log(1-mean.c1)
+    tau.c1 ~ dgamma(0.1, 0.1)
+    
+    mean.c2 ~ dunif(0,1)
+    c2.mean <- log(mean.c2)-log(1-mean.c2)
+    tau.c2 ~ dgamma(0.1, 0.1)
+    
+    probs ~ dunif(0,1)
+    
+    # Priors
+    for(i in 1:necto){
+    
+      a0[i] ~ dnorm(a0.mean, tau.a0)
+      a1[i] ~ dnorm(a1.mean, tau.a1)
+      a2[i] ~ dnorm(a2.mean, tau.a2)
+      a3[i] ~ dnorm(a3.mean, tau.a3)
+      a4[i] ~ dnorm(a4.mean, tau.a4)
+      
+      b0[i] ~ dnorm(b0.mean, tau.b0)
+      b1[i,1] <- 0
+      for(s in 2:K){
+        b1[i,s] ~ dnorm(0, 1)
+      }
+      b4[i,1] <- 0
+      for(s in 2:K){
+        b4[i,s] ~ dnorm(0,1)
+      }
+      
+      c0[i] ~ dnorm(c0.mean, tau.c0)
+      c1[i] ~ dnorm(c1.mean, tau.c1)
+      c2[i] ~ dnorm(c2.mean, tau.c2)
+    
+      # Occupancy model: Site
+      for(j in 1:nsite){
+      
+        logit(psi[j,i]) <- a0[i] + a1[i]*deadveg[j] + 
+                            a2[i]*grassforb[j] + a3[i]*abund[j]
+                            + a4[i]*div[j]
+        Z[j,i] ~ dbern(psi[j,i])
+
+        # Occupancy model: Host
+        for(k in tagmat[1:hostvec[j],j]){
+          # May need to create matrix of host sex
+          sex[k,i] ~ dbern(probs)
+        
+          logit(theta[k,i]) <- b0[i] + b1[i,host[k]] 
+                                      + b4[i,host[k]]*deadveg[j]
+          Y[k,i] ~ dbern(theta[k,i]*Z[j,i])
+          
+          # Detection model
+          for(l in 1:ncap[k]){
+          
+            logit(p[k,l,i]) <- c0[i] + c1[i]*l + c2[i]*julian[k,l]
+            obs[k,l,i] ~ dbern(p[k,l,i]*Y[k,i])
+    
+          }
+        }
+      }
+    }
+    }
+    
