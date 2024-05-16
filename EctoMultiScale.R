@@ -191,6 +191,19 @@ ggplot(mamm.raster, aes(x = Abbrev, y = ecto))+
 # ggsave("ectosraster.jpeg", height = 4, width = 8.5,
 #        units = "in")
 
+n.host <- mamm.ecto %>%
+  filter(SampleNo. != "") %>%
+  mutate(Species = case_when(Genus == "Ixodes" & 
+                               Species == "scapularis" ~
+                               paste(Species, Other, sep = "_"),
+                             TRUE ~ Species)) %>%
+  select(Abbrev, Order, Family, Genus, Species) %>%
+  distinct() %>%
+  filter(Order != "" & is.na(Order)==F) %>%
+  unite(ecto, Genus, Species) %>%
+  group_by(Order, Family, ecto) %>%
+  summarise(hosts = n())
+
 # by host subfamily:
 n.host.sub <- mamm.ecto %>%
   filter(SampleNo. != "") %>%
@@ -1997,6 +2010,8 @@ site.df <- site.df %>%
                            Ecto == "Ixodes_scapularis_nymph" ~ 5,
                            TRUE ~ hosts))
 
+# dev.new(width = 80, height = 60, unit = "mm", res=600,
+#         noRStudioGD=TRUE)
 # If counting host by subfamily:
 # site.df <- site.df %>%
 #   left_join(n.host.sub, by = c("Ecto" = "ecto"))
@@ -2058,12 +2073,12 @@ r2host <- ggplot(data = host.df, aes(x = host.r2, y = hosts))+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
+# dev.new(width = 182, height = 80, unit = "mm", res=1200,
+#         noRStudioGD=TRUE)
+
 r2site + r2host +
   plot_layout(guides = "collect")+
   plot_annotation(tag_levels = "a")
-
-# ggsave(filename = "r2nhost_sansrares.jpeg", width = 10,
-#        height = 3, units = "in", dpi = 600)
 
 # Ecto abundance vs specificity -------------
 abund.hosts <- mecto.clean %>%
@@ -2203,6 +2218,9 @@ ecto.habs <- mecto.clean %>%
 props <- apply(ecto.habs[,2:4], 2, function(x) x/sum(x))
 rownames(props) <- ecto.habs$Ecto
 # Not enough parasites in fields/farms for this to be informative
+
+dev.new(width = 182, height = 80, unit = "mm", res=1200,
+        noRStudioGD=TRUE)
 
 # both species
 (pele.plt|tast.plt) +
@@ -2406,6 +2424,9 @@ mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = adj_count,
 
 # ggsave(plot = mequ.fig, filename = "mequ_counts_adj.jpeg", 
 #        width = 4, height = 3, units = "in", dpi = 600)
+
+dev.new(width = 182, height = 140, unit = "mm", res=1200,
+        noRStudioGD=TRUE)
 
 (iscl.fig + iscn.fig)/
   (orle.fig + mequ.fig) +
