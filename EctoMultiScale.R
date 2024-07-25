@@ -24,6 +24,7 @@ library(patchwork)
 library(sf)
 library(terra)
 library(betapart)
+library(ggpubr)
 
 # Load data
 mamm.raw <- read.csv("MammRawData.csv")
@@ -796,7 +797,7 @@ inits <- function(){
 
 # Load model
 # model <- readRDS("ectomod.rds")
-# model <- readRDS("sansabund.rds")
+model <- readRDS("sansabund.rds")
 # model <- readRDS("mesos_agg.rds")
 # model <- readRDS("iscap_agg.rds")
 # model <- readRDS("sansrarehosts.rds")
@@ -2058,23 +2059,23 @@ qplot(data = site.df[site.df$Ecto != "Orchopeas_leucopus",],
 # no pattern when o. leucopus is dropped
 
 r2site <- ggplot(data = site.df, aes(x = site.r2, y = hosts))+
-  geom_point(aes(color = Order), size = 2)+
+  geom_point(aes(shape = Order), size = 2)+
   # geom_smooth(se = F, method = 'lm', color = "black")+
-  scale_color_viridis_d(end = 0.95)+
+  # scale_color_viridis_d(end = 0.95)+
   labs(x = bquote("Site"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
 r2host <- ggplot(data = host.df, aes(x = host.r2, y = hosts))+
-  geom_point(aes(color = Order), size = 2)+
+  geom_point(aes(shape = Order), size = 2)+
   geom_smooth(se = F, method = 'lm', color = "black")+
-  scale_color_viridis_d(end = 0.95)+
+  # scale_color_viridis_d(end = 0.95)+
   labs(x = bquote("Host"~R^2), y = "Number of Hosts")+
   theme_bw(base_size = 14)+
   theme(panel.grid = element_blank())
 
-# dev.new(width = 182, height = 80, unit = "mm", res=1200,
-#         noRStudioGD=TRUE)
+dev.new(width = 182, height = 80, unit = "mm", res=1200,
+        noRStudioGD=TRUE)
 
 r2site + r2host +
   plot_layout(guides = "collect")+
@@ -2093,12 +2094,15 @@ abund.hosts <- mecto.clean %>%
   summarise(Abund = n()) %>%
   left_join(n.host, by = c("Ecto" = "ecto"))
 
+dev.new(width = 88, height = 80, unit = "mm", res=1200,
+        noRStudioGD=TRUE)
+
 ggplot(data = abund.hosts, aes(x = hosts, y = log(Abund)))+
-  geom_point(aes(color = Order), size = 2)+
+  geom_point(aes(shape = Order), size = 2)+
   geom_smooth(method = 'lm', color = "black")+
-  scale_color_viridis_d(end = 0.9)+
+  scale_shape_discrete()+
   labs(x = "Hosts", y = "log(Abundance)")+
-  theme_bw()+
+  theme_bw(base_size=14)+
   theme(panel.grid = element_blank())
 
 summary(lm(data = abund.hosts, log(Abund)~hosts))
@@ -2150,9 +2154,20 @@ pele.plt <- ggplot(data = pele.necto, aes(x = pc1, y = necto))+
   geom_smooth(aes(y = predict(pele.mod, type = "count")), 
               color = "black")+
   labs(x = "Vegetation Coefficient (PC1)", 
-       y = "Ectoparasites Collected")+
+       y = "Ectoparasites Collected",
+       title = "P. leucopus")+
+  annotation_custom(grob = textGrob(label = "Leaf Litter"), 
+                    ymin = -1.7, ymax = -1.7, xmin = 1.4, 
+                    xmax = 1.4)+
+  annotation_custom(grob = textGrob(label = "Grass/Forb"),
+                    ymin = -1.7, ymax = -1.7, xmin = -0.9,
+                    xmax = -0.9)+
   theme_bw()+
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank()) 
+
+pele.gt <- ggplot_gtable(ggplot_build(pele.plt))
+pele.gt$layout$clip[pele.gt$layout$name == "panel"] <- "off"
+grid.draw(pele.gt)
 
 # ggsave(filename = "pele_infest_iscapagg.jpeg", width = 5, height = 3,
 #        units = "in", dpi = 600)
@@ -2196,9 +2211,20 @@ tast.plt <- ggplot(data = tast.necto, aes(x = pc1, y = necto))+
               color = "black")+
   # add geom_smooth if I can get it to work
   labs(x = "Vegetation Coefficient (PC1)", 
-       y = "Ectoparasites Collected")+
+       y = "Ectoparasites Collected",
+       title = "T. striatus")+
+  annotation_custom(grob = textGrob(label = "Leaf Litter"), 
+                    ymin = -0.9, ymax = -0.9, xmin = 1.4, 
+                    xmax = 1.4)+
+  annotation_custom(grob = textGrob(label = "Grass/Forb"),
+                    ymin = -0.9, ymax = -0.9, xmin = -0.9,
+                    xmax = -0.9)+
   theme_bw()+
   theme(panel.grid = element_blank())
+
+tast.gt <- ggplot_gtable(ggplot_build(tast.plt))
+tast.gt$layout$clip[tast.gt$layout$name == "panel"] <- "off"
+grid.draw(tast.gt)
 
 # ggsave(filename = "tast_infest.jpeg", width = 5, height = 3,
 #        units = "in", dpi = 600)
@@ -2223,8 +2249,7 @@ dev.new(width = 182, height = 80, unit = "mm", res=1200,
         noRStudioGD=TRUE)
 
 # both species
-(pele.plt|tast.plt) +
-  plot_annotation(tag_levels = "a")
+ggarrange(pele.gt, tast.gt, ncol = 2, labels = c("a", "b"))
 
 # ggsave(filename = "infest_both.jpeg", width = 7, height = 3,
 #        units = "in", dpi = 600)
@@ -2303,7 +2328,8 @@ orle.all <- full_join(orle.abund, orle.all)
 orle.fig <- ggplot(data = orle.all, aes(x = Abbrev, y = adj_count, 
                             fill = Habitat))+
   geom_col(position = "dodge")+
-  labs(x = "Host Species", y = "Adjusted Count")+
+  labs(x = "Host Species", y = "Adjusted Count",
+       title = "O. leucopus")+
   scale_fill_viridis_d(end = 0.9)+
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
@@ -2330,7 +2356,8 @@ iscl.all <- full_join(iscl.abund, iscl.all)
 iscl.fig <- ggplot(data = iscl.all, aes(x = Abbrev, y = adj_count,
                                         fill = Habitat))+
   geom_col(position = "dodge")+
-  labs(x = "Host Species", y = "Adjusted Count")+
+  labs(x = "Host Species", y = "Adjusted Count",
+       title = "I. scapularis (larvae)")+
   scale_fill_viridis_d(end = 0.9)+
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
@@ -2359,7 +2386,8 @@ iscn.fig <- ggplot(data = iscn.all,
                    aes(x = Abbrev, y = adj_count,
                        fill = Habitat))+
   geom_col(position = "dodge")+
-  labs(x = "Host Species", y = "Adjusted Count")+
+  labs(x = "Host Species", y = "Adjusted Count",
+       title = "I. scapularis (nymph)")+
   scale_fill_viridis_d(end = 0.9)+
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
@@ -2417,7 +2445,8 @@ mequ.all <- full_join(mequ.abund, mequ.all)
 mequ.fig <- ggplot(data = mequ.all, aes(x = Abbrev, y = adj_count, 
                                         fill = Habitat))+
   geom_col(position = "dodge")+
-  labs(x = "Host Species", y = "Adjusted Count")+
+  labs(x = "Host Species", y = "Adjusted Count",
+       title = "M. quirini")+
   scale_fill_viridis_d(end = 0.9)+
   theme_bw(base_size = 12)+
   theme(panel.grid = element_blank())
